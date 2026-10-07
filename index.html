@@ -5,8 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mashnews Velocity — орбитальная аркада</title>
   <link rel="stylesheet" href="/src/style.css">
+  <!-- Яндекс Метрика, счётчик 113538421. На локальном сервере разработки не загружается,
+       чтобы отладка не попадала в статистику. Карта кликов выключена: по холсту игры она бесполезна. -->
+  <script>
+    if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+      (function (m, e, t, r, i, k, a) {
+        m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments); };
+        m[i].l = 1 * new Date();
+        k = e.createElement(t), a = e.getElementsByTagName(t)[0], k.async = 1, k.src = r, a.parentNode.insertBefore(k, a);
+      })(window, document, 'script', 'https://mc.yandex.ru/metrika/tag.js', 'ym');
+      ym(113538421, 'init', { clickmap: false, trackLinks: true, accurateTrackBounce: true });
+    }
+  </script>
 </head>
 <body>
+  <noscript><div><img src="https://mc.yandex.ru/watch/113538421" style="position:absolute; left:-9999px;" alt=""></div></noscript>
   <canvas id="gl"></canvas>
   <canvas id="hud"></canvas>
 
@@ -51,7 +64,7 @@
       </div>
       <footer class="fine">
         <span id="data-line"></span>
-        <span>Неофициальный фан-проект. Не связан с ООО «Бюро 1440» и SpaceX.</span>
+        <span>Неофициальный фан-проект. Не связан с ООО «Бюро 1440» и SpaceX. Посещения считает Яндекс Метрика, она использует cookie.</span>
       </footer>
     </section>
 
