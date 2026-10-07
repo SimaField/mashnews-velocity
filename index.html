@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mashnews Velocity — орбитальная аркада</title>
   <link rel="stylesheet" href="/src/style.css">
   <!-- Яндекс Метрика, счётчик 113538421. На локальном сервере разработки не загружается,
@@ -25,6 +25,8 @@
   <canvas id="hud"></canvas>
 
   <div id="ui">
+    <div id="touch" class="hidden"></div>
+    <div id="safe"></div>
     <section id="s-loading" class="screen center">
       <div class="loading">
         <div class="logo small"><span>MASHNEWS</span><span>VELOCITY</span></div>
@@ -105,7 +107,16 @@
     <section id="s-help" class="screen overlay hidden">
       <div class="panel dialog">
         <h2>Управление</h2>
-        <dl class="keys">
+        <dl class="keys for-touch">
+          <dt>Левый палец</dt><dd>джойстик: появляется там, где коснулись левой части экрана</dd>
+          <dt>ОГОНЬ</dt><dd>пушка, пока держите кнопку</dd>
+          <dt>РАКЕТА</dt><dd>ракета по захваченной цели; на кнопке остаток</dd>
+          <dt>ФОРСАЖ</dt><dd>ускорение, пока держите; расходует топливо</dd>
+          <dt>ЦЕЛЬ</dt><dd>следующая цель</dd>
+          <dt>II</dt><dd>пауза</dd>
+          <dt>Экран</dt><dd>телефон нужно держать горизонтально</dd>
+        </dl>
+        <dl class="keys for-keys">
           <dt>Мышь</dt><dd>курс; курсор захватывается после щелчка по экрану</dd>
           <dt>W A S D, ← → ↑ ↓</dt><dd>курс с клавиатуры: W — вверх, S — вниз</dd>
           <dt>Shift</dt><dd>форсаж, расходует топливо</dd>
@@ -143,6 +154,11 @@
         </nav>
       </div>
     </section>
+
+    <div id="rotate" class="rotate hidden">
+      <div class="rotate-icon" aria-hidden="true"></div>
+      <p>Поверните телефон горизонтально</p>
+    </div>
 
     <div id="tip" class="tip hidden"></div>
   </div>

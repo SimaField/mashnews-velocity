@@ -150,13 +150,15 @@ export class Menu {
     // Глобус встаёт по центру области справа от колонки меню (её размеры заданы
     // в style.css) и уменьшается, если вместе с оболочкой Starlink туда не влезает.
     // На узком экране колонка уходит наверх, глобус остаётся по центру.
-    const column = w > 760 ? Math.min(400, w - 40) + THREE.MathUtils.clamp(w * 0.045, 20, 72) : 0;
+    const stacked = w <= 760 && h > w; // телефон вертикально: колонка сверху, глобус в нижней части
+    const column = stacked ? 0 : Math.min(400, w - 40) + THREE.MathUtils.clamp(w * 0.045, 20, 72);
     const shift = Math.round(column / 2);
-    const fit = column ? Math.min(1, ((w - column) * 0.46) / (h * 0.33)) : 1;
+    const drop = stacked ? Math.round(h * 0.18) : 0;
+    const fit = Math.min(1, ((w - column) * (stacked ? 0.42 : 0.46)) / (h * 0.33));
     for (const cam of [this.camera, this.previewCamera]) {
       cam.aspect = w / h;
       cam.zoom = fit;
-      if (shift) cam.setViewOffset(w, h, -shift, 0, w, h);
+      if (shift || drop) cam.setViewOffset(w, h, -shift, -drop, w, h);
       else cam.clearViewOffset();
       cam.updateProjectionMatrix();
     }

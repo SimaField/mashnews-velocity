@@ -623,11 +623,13 @@ class Defend extends Mission {
 
   drawBars(hud) {
     const g = hud.g, iss = this.iss, boss = this.boss;
-    const bw = 220, x = Math.round(hud.w / 2 - bw / 2), y = 20;
-    hud.plate(x - 62, 10, bw + 124, boss.active ? 60 : 32);
+    const small = hud.compact;
+    const bw = small ? 130 : 220, pad = small ? 44 : 62;
+    const x = Math.round(hud.w / 2 - bw / 2), y = small ? 16 : 20;
+    hud.plate(x - pad, y - 10, bw + pad + (small ? 50 : 62), boss.active ? 60 : 32);
     const frac = Math.max(0, iss.hp / iss.max);
     const color = frac < 0.3 ? COLORS.red : COLORS.gold;
-    hud.text('МКС', x - 50, y + 10, color, 12);
+    hud.text('МКС', x - pad + 12, y + 10, color, 12);
     g.strokeStyle = color;
     g.lineWidth = 1;
     g.globalAlpha = 0.5;
@@ -639,14 +641,15 @@ class Defend extends Mission {
     if (!boss.active) return;
 
     // Узлы носителя: три двигателя и отсек (контур — пока створки закрыты)
-    hud.text('STARSHIP', x - 50, y + 36, COLORS.red, 10);
+    hud.text(small ? 'БОСС' : 'STARSHIP', x - pad + 12, y + 36, COLORS.red, 10);
     boss.parts.forEach((part, k) => {
       const px = x + 28 + k * 22, py = y + 27;
       g.strokeStyle = g.fillStyle = part.alive ? COLORS.red : 'rgba(255,77,94,.25)';
       g.strokeRect(px + 0.5, py + 0.5, 15, 9);
       if (part.alive && part.open) g.fillRect(px + 2, py + 2, 12, 6);
     });
-    hud.text(`ДО СТЫКОВКИ ${Math.max(0, Math.round(boss.range - DOCK_RANGE))} км`, x + bw + 50, y + 36, COLORS.red, 10, 'right');
+    const left = Math.max(0, Math.round(boss.range - DOCK_RANGE));
+    hud.text(small ? `${left} км` : `ДО СТЫКОВКИ ${left} км`, x + bw + (small ? 42 : 50), y + 36, COLORS.red, 10, 'right');
   }
 
   drawMarkers(hud) {

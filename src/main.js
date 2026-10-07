@@ -9,6 +9,7 @@ import { SHIPS } from './models.js';
 import { MISSIONS } from './missions.js';
 import { formatLatLon } from './orbits.js';
 import { GOALS, reachGoal } from './analytics.js';
+import { TouchControls } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 const num = (n) => n.toLocaleString('ru-RU');
@@ -27,6 +28,10 @@ let mode = 'loading'; // loading | menu | game
 let paused = false;
 let shipId = 'spiral';
 let missionId = 'intercept';
+// Сенсорный режим: экранные кнопки, компактные приборы, игра только в альбомной ориентации
+let touchMode = false;
+let rotateHold = false; // телефон держат вертикально: бой стоит, пока не повернут
+const touch = new TouchControls($('touch'), input, () => setPaused(true));
 
 function show(name) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('hidden', el.id !== `s-${name}`);
@@ -38,6 +43,38 @@ function resize() {
   hud.resize(w, h);
   if (mode === 'game') game.resize(w, h);
   else if (menu) menu.resize(w, h);
+  updateTouchUi();
+}
+
+function setTouchMode(on) {
+  if (touchMode === on) return;
+  touchMode = on;
+  hud.compact = on;
+  document.body.classList.toggle('touch', on);
+  updateTouchUi();
+}
+
+// Экранные кнопки видны только в самом бою; в вертикальном положении вместо них просьба повернуть телефон
+function updateTouchUi() {
+  const inBattle = touchMode && mode === 'game' && game && game.state === 'play';
+  rotateHold = inBattle && window.innerHeight > window.innerWidth;
+  $('rotate').classList.toggle('hidden', !rotateHold);
+  touch.setVisible(inBattle && !paused && !rotateHold);
+}
+
+// Полный экран и альбомная ориентация. Работает в Chrome на Android; Safari на iPhone
+// этого не умеет, там остаётся подсказка «поверните телефон».
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (!el.requestFullscreen || document.fullscreenElement) return;
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => (screen.orientation && screen.orientation.lock ? screen.orientation.lock('landscape') : null))
+    .catch(() => {});
+}
+
+function leaveFullscreen() {
+  if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
 
 // ---------- меню ----------
@@ -128,7 +165,9 @@ function launch() {
   input.reset();
   input.enabled = true;
   game.start();
-  lockPointer();
+  if (touchMode) enterFullscreen();
+  else lockPointer();
+  updateTouchUi();
   reachGoal(GOALS.start, { mission: missionId, ship: shipId });
 }
 
@@ -141,9 +180,10 @@ function setPaused(value) {
   if (value) {
     audio.engine(0, false, false);
     if (document.pointerLockElement) document.exitPointerLock();
-  } else {
+  } else if (!touchMode) {
     lockPointer();
   }
+  updateTouchUi();
 }
 
 function showResult(res) {
@@ -170,6 +210,7 @@ function showResult(res) {
     ['Время', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`],
   ]);
   show('result');
+  updateTouchUi();
 }
 
 function restart() {
@@ -184,6 +225,7 @@ function leaveGame() {
   game.dispose();
   game = null;
   hud.clear();
+  leaveFullscreen();
   resyncNow();
   setSpeed(60);
   toTitle();
@@ -268,8 +310,16 @@ function bind() {
     if (!document.pointerLockElement) setPaused(true);
   });
   glCanvas.addEventListener('click', () => {
-    if (mode === 'game' && !paused && game.state === 'play' && !document.pointerLockElement) lockPointer();
+    if (mode === 'game' && !paused && !touchMode && game.state === 'play' && !document.pointerLockElement) lockPointer();
   });
+  // Режим выбирается по тому, чем человек на самом деле пользуется: первое касание
+  // пальцем включает экранные кнопки, мышь на устройстве без сенсорного экрана их убирает
+  const coarse = window.matchMedia('(pointer: coarse)');
+  setTouchMode(coarse.matches);
+  window.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch') setTouchMode(true);
+    else if (e.pointerType === 'mouse' && !coarse.matches) setTouchMode(false);
+  }, true);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) setPaused(true);
   });
@@ -302,9 +352,10 @@ function frame(now) {
     const text = `${clockFormat.format(menu.now())} UTC`;
     if (text !== clockText) $('clock').textContent = clockText = text;
   } else if (mode === 'game') {
-    if (!paused) game.update(dt);
+    if (!paused && !rotateHold) game.update(dt);
     game.render();
     input.endFrame();
+    if (touchMode) touch.setMissiles(game.player.missiles);
   }
 }
 
@@ -328,7 +379,7 @@ async function init() {
 
 if (import.meta.env.DEV) {
   // Отладочный доступ из консоли
-  window.__dv = { get game() { return game; }, get menu() { return menu; }, input, launch, toBriefing };
+  window.__dv = { get game() { return game; }, get menu() { return menu; }, input, launch, toBriefing, setTouchMode };
 }
 
 init();

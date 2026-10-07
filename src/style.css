@@ -15,6 +15,8 @@
 * { box-sizing: border-box; }
 
 html, body {
+  overscroll-behavior: none;
+  touch-action: manipulation; /* без увеличения двойным касанием */
   margin: 0;
   height: 100%;
   overflow: hidden;
@@ -34,6 +36,7 @@ html, body {
   display: block;
 }
 #gl.retro { image-rendering: pixelated; }
+#gl, #hud, #ui { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 #hud { pointer-events: none; }
 
 /* Интерфейс лежит поверх холста и пропускает мышь к глобусу везде, кроме панелей */
@@ -311,9 +314,186 @@ h2 {
 }
 .tip b { color: var(--gold); font-size: 13px; }
 
-@media (max-width: 760px) {
-  .col { top: 24px; transform: none; }
-  .timebar { left: 16px; right: 16px; justify-content: space-between; }
+/* ---------- сенсорное управление ---------- */
+
+/* Невидимый элемент, по которому приборы узнают размер выреза экрана */
+#safe {
+  position: fixed;
+  visibility: hidden;
+  pointer-events: none;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+body:not(.touch) .for-touch, body.touch .for-keys { display: none; }
+
+#touch { position: absolute; inset: 0; touch-action: none; }
+.t-zone {
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 0;
+  width: 42%;
+  pointer-events: auto;
+  touch-action: none;
+}
+.t-base {
+  position: absolute;
+  left: calc(92px + env(safe-area-inset-left));
+  top: calc(100% - 88px - env(safe-area-inset-bottom));
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  border: 1px solid rgba(94, 242, 255, 0.35);
+  background: rgba(8, 18, 34, 0.3);
+  display: grid;
+  place-items: center;
+}
+.t-zone.on .t-base { border-color: var(--cyan); }
+.t-knob {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(94, 242, 255, 0.3);
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 14px rgba(94, 242, 255, 0.35);
+}
+.t-btn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  appearance: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(94, 242, 255, 0.45);
+  background: rgba(8, 18, 34, 0.45);
+  color: var(--text);
+  font: 700 10px var(--mono);
+  letter-spacing: 0.06em;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.t-btn.on { background: rgba(94, 242, 255, 0.28); border-color: var(--cyan); }
+.t-fire {
+  right: calc(22px + env(safe-area-inset-right));
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  width: 92px;
+  height: 92px;
+  font-size: 12px;
+  color: var(--gold);
+  border-color: rgba(255, 178, 62, 0.7);
+}
+.t-fire.on { background: rgba(255, 178, 62, 0.3); border-color: var(--gold); }
+.t-boost {
+  right: calc(34px + env(safe-area-inset-right));
+  bottom: calc(128px + env(safe-area-inset-bottom));
+  width: 66px;
+  height: 66px;
+}
+.t-missile {
+  right: calc(128px + env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 64px;
+  height: 64px;
+}
+.t-missile b { display: block; font-size: 13px; color: var(--cyan); }
+.t-missile.empty { opacity: 0.45; }
+.t-missile.empty b { color: var(--red); }
+.t-target {
+  right: calc(116px + env(safe-area-inset-right));
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  width: 52px;
+  height: 52px;
+}
+.t-pause {
+  right: calc(8px + env(safe-area-inset-right));
+  top: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.rotate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  background: rgba(2, 6, 14, 0.9);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: auto;
+}
+.rotate p { margin: 0; max-width: 16em; }
+.rotate-icon {
+  width: 46px;
+  height: 78px;
+  border: 2px solid var(--cyan);
+  border-radius: 9px;
+  box-shadow: 0 0 18px rgba(94, 242, 255, 0.35);
+  animation: rotate-hint 2.4s ease-in-out infinite;
+}
+@keyframes rotate-hint {
+  0%, 25% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(-90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rotate-icon { animation: none; transform: rotate(-90deg); }
+}
+
+/* ---------- узкие и невысокие экраны ---------- */
+
+/* Телефон вертикально: меню сверху, глобус под ним */
+@media (max-width: 760px) and (orientation: portrait) {
+  .col { top: 20px; transform: none; }
+  .logo { margin-bottom: 18px; }
+  .timebar { display: none; }
   .fine { flex-direction: column; gap: 2px; }
   .lead { display: none; }
+}
+
+/* Телефон горизонтально: по высоте помещается немного, колонка меню сжимается и прокручивается */
+@media (max-height: 520px) {
+  .col { max-height: calc(100vh - 12px); overflow-y: auto; scrollbar-width: none; }
+  .col::-webkit-scrollbar { display: none; }
+  .lead, .timebar, #data-line { display: none; }
+  .fine { left: auto; width: 44%; bottom: 8px; justify-content: flex-end; text-align: right; }
+  .eyebrow { margin-bottom: 6px; }
+  .logo { font-size: clamp(28px, 4.2vw, 40px); margin-bottom: 12px; }
+  h2 { font-size: 24px; margin-bottom: 10px; }
+  .stats { margin: 0 0 12px; gap: 8px; }
+  .stat { padding: 8px 12px; }
+  .stat b { font-size: 22px; }
+  .menu { gap: 8px; }
+  .btn { padding: 11px 14px; }
+  #s-title .menu { flex-direction: row; flex-wrap: wrap; }
+  #s-title .menu .btn { flex: 1 1 40%; white-space: nowrap; }
+  #s-title .menu .switch { flex-basis: 100%; margin-top: 0; }
+  /* Кнопки «Назад» и «Далее» остаются на виду, даже когда содержимое колонки прокручивается */
+  .menu.row {
+    position: sticky;
+    bottom: 0;
+    margin-top: 0;
+    padding: 10px 0 2px;
+    background: linear-gradient(rgba(4, 9, 19, 0), var(--bg) 35%);
+  }
+  .ships { grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .ship { padding: 8px 10px; }
+  .ship b { font-size: 14px; }
+  .ship span, .ship em { display: none; }
+  .detail { padding: 10px 14px; }
+  .detail p { margin-bottom: 8px; font-size: 13px; }
+  .detail .hint { margin-top: 8px; font-size: 12px; }
+  .bars { gap: 5px 12px; }
+  .facts { gap: 4px 14px; font-size: 12px; }
+  .seg.missions { margin-bottom: 8px; }
+  .seg.missions button { padding: 8px 10px; }
+  .dialog { padding: 16px 20px; }
+  .dialog .menu { margin-top: 12px; }
+  .keys { gap: 5px 16px; font-size: 13px; }
 }

@@ -18,6 +18,10 @@ export class Hud {
     this.g = canvas.getContext('2d');
     this.w = this.h = 0;
     this.dpr = 1;
+    // Раскладка для телефона: нижние углы заняты джойстиком и кнопками,
+    // поэтому приборы собраны по центру и вверху и сделаны мельче
+    this.compact = false;
+    this.inset = { l: 0, r: 0, b: 0 }; // вырез экрана и системные полосы
   }
 
   resize(w, h) {
@@ -26,6 +30,13 @@ export class Hud {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.cv.width = Math.round(w * this.dpr);
     this.cv.height = Math.round(h * this.dpr);
+    const safe = document.getElementById('safe');
+    if (safe) {
+      const cs = getComputedStyle(safe);
+      this.inset.l = parseFloat(cs.paddingLeft) || 0;
+      this.inset.r = parseFloat(cs.paddingRight) || 0;
+      this.inset.b = parseFloat(cs.paddingBottom) || 0;
+    }
   }
 
   clear() {
@@ -79,10 +90,10 @@ export class Hud {
     g.stroke();
   }
 
-  bar(x, y, w, label, value, max, color) {
+  bar(x, y, w, label, value, max, color, labelWidth = 74) {
     const g = this.g, frac = Math.max(0, Math.min(1, value / max));
-    this.text(label, x, y + 9, color, 11);
-    const bx = x + 74;
+    this.text(label, x, y + 9, color, labelWidth < 60 ? 10 : 11);
+    const bx = x + labelWidth;
     g.strokeStyle = color;
     g.globalAlpha = 0.45;
     g.strokeRect(bx + 0.5, y + 0.5, w, 9);
@@ -284,6 +295,7 @@ export class Hud {
   }
 
   drawGauges(game) {
+    if (this.compact) return this.drawGaugesCompact(game);
     const { player: p, ship } = game, w = this.w, h = this.h;
     const x = 24, y = h - 84;
     this.plate(12, h - 98, 276, 74);
@@ -302,9 +314,23 @@ export class Hud {
     this.text(`${ship.name.toUpperCase()} · ПУШКА Р-23М`, rx, h - 18, 'rgba(94,242,255,.6)', 10, 'right');
   }
 
+  // Телефон: щит, корпус и топливо слева от радара; ракеты показаны на своей кнопке
+  drawGaugesCompact(game) {
+    const { player: p, ship } = game;
+    const x = Math.round(this.w / 2) - 137, y = this.h - 62 - this.inset.b;
+    this.plate(x, y, 176, 56);
+    const hullColor = p.hull < ship.hull * 0.3 ? COLORS.red : COLORS.green;
+    this.bar(x + 8, y + 6, 78, 'ЩИТ', p.shield, ship.shield, COLORS.cyan, 46);
+    this.bar(x + 8, y + 22, 78, 'КОРП', p.hull, ship.hull, hullColor, 46);
+    this.bar(x + 8, y + 38, 78, 'ТОПЛ', p.fuel, ship.fuel, COLORS.gold, 46);
+    this.text(`${Math.round(p.speed)} км/с`, x + 4, y - 7, p.boosting ? COLORS.gold : COLORS.cyan, 11);
+    this.text(`${Math.round(p.alt)} км`, x + 172, y - 7, p.alt < 260 ? COLORS.red : COLORS.cyan, 11, 'right');
+  }
+
   drawRadar(game) {
-    const g = this.g, { sl, rs, player: p } = game;
-    const cx = this.w / 2, cy = this.h - 82, R = 62, k = R / RADAR_RANGE;
+    const g = this.g, { sl, rs, player: p } = game, compact = this.compact;
+    const R = compact ? 40 : 62, k = R / RADAR_RANGE;
+    const cx = this.w / 2 + (compact ? 92 : 0), cy = this.h - (compact ? 50 + this.inset.b : 82);
     g.fillStyle = 'rgba(4,14,26,.55)';
     g.strokeStyle = 'rgba(94,242,255,.55)';
     g.lineWidth = 1;
@@ -355,18 +381,19 @@ export class Hud {
     g.lineTo(cx - 4, cy + 4);
     g.closePath();
     g.fill();
-    this.text(`${RADAR_RANGE} км`, cx, cy + R + 14, 'rgba(94,242,255,.55)', 9, 'center');
+    if (!compact) this.text(`${RADAR_RANGE} км`, cx, cy + R + 14, 'rgba(94,242,255,.55)', 9, 'center');
   }
 
   drawStatus(game) {
     const p = game.player, w = this.w, h = this.h;
     const status = game.mission.status();
+    const linked = game.comm.dist < COMM_RANGE && game.comm.name !== '';
+    if (this.compact) return this.drawStatusCompact(game, status, linked);
     this.plate(12, 12, 244, 76);
     this.text(status.title, 24, 30, 'rgba(94,242,255,.65)', 10);
     this.text(status.big, 24, 56, COLORS.cyan, 22, 'left', 700);
     this.text(`СЧЁТ ${game.score}   ВРЕМЯ ${mmss(game.t)}`, 24, 76, COLORS.cyan, 12);
 
-    const linked = game.comm.dist < COMM_RANGE && game.comm.name !== '';
     if (linked) {
       this.text(`СВЯЗЬ · ${game.comm.name} · ${Math.round(game.comm.dist)} км`, w - 24, 30, COLORS.gold, 11, 'right');
       this.text('щит восстанавливается быстрее', w - 24, 46, 'rgba(255,178,62,.7)', 10, 'right');
@@ -391,5 +418,33 @@ export class Hud {
     }
     if (game.state === 'won') this.text('ЗАДАЧА ВЫПОЛНЕНА', w / 2, h * 0.42, COLORS.gold, 34, 'center', 700);
     if (game.state === 'lost') this.text(game.shipLost ? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.42, COLORS.red, 34, 'center', 700);
+  }
+
+  // Телефон: тот же состав, но мельче; правый верхний угол оставлен кнопке паузы
+  drawStatusCompact(game, status, linked) {
+    const w = this.w, h = this.h, x = 16 + this.inset.l;
+    this.plate(x - 8, 8, 176, 62);
+    this.text(status.title, x, 22, 'rgba(94,242,255,.65)', 9);
+    this.text(status.big, x, 43, COLORS.cyan, 17, 'left', 700);
+    this.text(`СЧЁТ ${game.score}  ${mmss(game.t)}`, x, 60, COLORS.cyan, 10);
+
+    const rx = w - 62 - this.inset.r;
+    if (linked) this.text(`СВЯЗЬ · ${game.comm.name}`, rx, 24, COLORS.gold, 10, 'right');
+    else this.text('НЕТ СВЯЗИ', rx, 24, 'rgba(160,180,210,.7)', 10, 'right');
+
+    let y = 92;
+    for (let i = game.messages.length - 1; i >= Math.max(0, game.messages.length - 3); i--) {
+      const m = game.messages[i];
+      this.g.globalAlpha = Math.max(0, Math.min(1, (5 - m.t) / 1.2));
+      this.text(m.text, x, y, m.color, 11);
+      y += 15;
+    }
+    this.g.globalAlpha = 1;
+
+    if (game.warning && Math.floor(game.clock * 4) % 2 === 0) {
+      this.text(game.warning, w / 2, Math.round(h * 0.27), COLORS.red, 16, 'center', 700);
+    }
+    if (game.state === 'won') this.text('ЗАДАЧА ВЫПОЛНЕНА', w / 2, h * 0.45, COLORS.gold, 26, 'center', 700);
+    if (game.state === 'lost') this.text(game.shipLost ? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.45, COLORS.red, 26, 'center', 700);
   }
 }
