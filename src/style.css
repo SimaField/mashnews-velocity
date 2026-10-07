@@ -230,6 +230,9 @@ h2 {
   cursor: pointer;
 }
 .seg button.on { color: #04121c; background: var(--cyan); }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.seg.missions { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+.seg.missions button { padding: 11px 10px; font-size: 13px; }
 
 .fine {
   position: absolute;

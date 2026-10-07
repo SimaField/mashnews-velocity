@@ -5,16 +5,16 @@ import { writeFile, readFile } from 'node:fs/promises';
 
 const API = 'https://celestrak.org/NORAD/elements/gp.php';
 const OUT = new URL('../public/data/', import.meta.url);
-const SETS = { rassvet: 'RASSVET', starlink: 'STARLINK' };
+const SETS = { rassvet: 'NAME=RASSVET', starlink: 'NAME=STARLINK', iss: 'CATNR=25544' };
 
 const rows = (csv) => csv.trim().split(/\r?\n/).length - 1;
 
 const counts = {};
 let updated = 0;
-for (const [file, name] of Object.entries(SETS)) {
+for (const [file, query] of Object.entries(SETS)) {
   const target = new URL(`${file}.csv`, OUT);
   try {
-    const res = await fetch(`${API}?NAME=${name}&FORMAT=csv`, {
+    const res = await fetch(`${API}?${query}&FORMAT=csv`, {
       headers: { 'User-Agent': 'MashnewsVelocity/0.1 (catalog snapshot)' },
     });
     const text = await res.text();

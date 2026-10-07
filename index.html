@@ -73,12 +73,13 @@
 
     <section id="s-briefing" class="screen hidden">
       <div class="col">
-        <div class="eyebrow">Миссия 01</div>
-        <h2>Перехват</h2>
+        <div class="eyebrow" id="brief-eyebrow"></div>
+        <h2 id="brief-title"></h2>
+        <div class="seg missions" id="missions"></div>
         <div class="panel detail">
-          <p>Одна орбитальная плоскость Starlink проходит сквозь рабочие высоты «Рассвета». Пройдите вдоль неё и уничтожьте все отмеченные аппараты. После первых потерь противник поднимет перехватчики охраны.</p>
+          <p id="brief-text"></p>
           <dl class="facts" id="brief-facts"></dl>
-          <p class="hint">Рядом с «Рассветом» щит восстанавливается быстрее. По своим не стрелять: штраф 2000 очков.</p>
+          <p class="hint" id="brief-hint"></p>
         </div>
         <nav class="menu row">
           <button class="btn" id="b-brief-back">Назад</button>

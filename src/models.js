@@ -100,6 +100,38 @@ const PARTS = {
     part(box(4.4, 0.1, 1.3), '#5a2a35', { p: [0, 0, 1.7] }),
     part(box(0.1, 1.5, 1.1), '#5a2a35', { p: [0, 0.5, 1.9] }),
   ],
+  // МКС: ферма поперёк курса, восемь крыльев батарей, цепочка модулей вдоль курса
+  iss: () => {
+    const arrays = [];
+    for (const x of [-47, -36, 36, 47]) {
+      for (const z of [-19, 19]) arrays.push(part(box(8.5, 0.2, 30), '#b07a2a', { p: [x, 0, z] }));
+    }
+    return [
+      part(box(100, 2.4, 2.4), GREY),
+      ...arrays,
+      part(box(3.2, 0.2, 15), WHITE, { p: [-15, 0, 10] }),
+      part(box(3.2, 0.2, 15), WHITE, { p: [15, 0, 10] }),
+      part(cyl(2.3, 2.3, 46, 8), WHITE, { r: NOSE, p: [0, -2.2, 0] }),
+      part(cyl(2.3, 2.3, 17, 8), '#cfd6de', { r: [0, 0, Math.PI / 2], p: [0, -2.2, -15] }),
+      part(cyl(2.0, 2.0, 12, 8), '#cfd6de', { p: [0, -7, 12] }),
+      part(box(1.6, 0.2, 13), PANEL, { p: [5.5, -2.2, 20] }),
+      part(box(1.6, 0.2, 13), PANEL, { p: [-5.5, -2.2, 20] }),
+    ];
+  },
+  // Starship: корпус 50 км в длину, нос вперёд; двигатели и отсек — отдельные модели
+  starship: () => [
+    part(cyl(4.5, 4.5, 38, 10), '#c3cad3', { r: NOSE, p: [0, 0, 6] }),
+    part(cyl(0.7, 4.5, 12, 10), '#c3cad3', { r: NOSE, p: [0, 0, -19] }),
+    part(box(8.4, 0.5, 40), '#1e2228', { p: [0, -4.2, 4] }),
+    part(box(3.6, 0.4, 6.5), '#2a2f38', { p: [5.6, 0, -14] }),
+    part(box(3.6, 0.4, 6.5), '#2a2f38', { p: [-5.6, 0, -14] }),
+    part(box(4.6, 0.4, 9.5), '#2a2f38', { p: [6.2, 0, 19] }),
+    part(box(4.6, 0.4, 9.5), '#2a2f38', { p: [-6.2, 0, 19] }),
+    part(cyl(4.7, 4.7, 2, 10), DARK, { r: NOSE, p: [0, 0, 24.5] }),
+  ],
+  starshipEngine: () => [part(cyl(1.0, 1.9, 3.4, 8), '#4a3038', { r: NOSE })],
+  starshipBay: () => [part(box(5.2, 0.8, 10), '#ff5a2a')],
+  starshipDoor: () => [part(box(5.8, 0.5, 10.6), '#c3cad3')],
   missile: () => [
     part(new THREE.ConeGeometry(0.45, 3, 5), WHITE, { r: NOSE }),
     part(box(1.4, 0.06, 0.6), GREY, { p: [0, 0, 1.2] }),
@@ -110,6 +142,7 @@ const PARTS = {
 const EDGE = {
   spiral: '#ffb23e', buran: '#ffb23e', is: '#ffb23e', zeus: '#ffb23e',
   starlink: '#3d7fd9', rassvet: '#ffb23e', guard: '#ff4d5e', missile: '#ffd9a0',
+  iss: '#ffb23e', starship: '#ff4d5e', starshipEngine: '#ff9a3c', starshipBay: '#ffd27a', starshipDoor: '#ff4d5e',
 };
 
 const bodyMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
