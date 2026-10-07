@@ -60,9 +60,10 @@ async function liveRassvet() {
 // на снимке, если не вышло.
 export async function loadCatalog() {
   const base = `${import.meta.env.BASE_URL}data/`;
-  const [starlinkCsv, rassvetSnapshot, meta] = await Promise.all([
+  const [starlinkCsv, rassvetSnapshot, issCsv, meta] = await Promise.all([
     getText(`${base}starlink.csv`, 30000),
     getText(`${base}rassvet.csv`, 30000),
+    getText(`${base}iss.csv`, 30000).catch(() => ''), // без станции недоступна только вторая миссия
     getText(`${base}meta.json`, 30000).then(JSON.parse).catch(() => ({})),
   ]);
 
@@ -73,6 +74,7 @@ export async function loadCatalog() {
   const catalog = {
     starlink: new SatSet(parseCsv(starlinkCsv)),
     rassvet: new SatSet(parseCsv(rassvetCsv)),
+    iss: issCsv.startsWith('OBJECT_NAME') ? new SatSet(parseCsv(issCsv)) : null,
     meta,
     live,
     epoch: null,
@@ -86,4 +88,8 @@ export function syncCatalog(catalog, date) {
   catalog.epoch = date;
   catalog.starlink.sync(date);
   catalog.rassvet.sync(date);
+  if (catalog.iss) {
+    catalog.iss.sync(date);
+    if (!catalog.iss.aliveCount) catalog.iss = null; // элементы устарели настолько, что орбита не считается
+  }
 }

@@ -2,61 +2,33 @@ import * as THREE from 'three';
 import { R_EARTH, EARTH_RATE, gmstAt, sunDirection } from './orbits.js';
 import { createRetroEarth, createSky } from './earth.js';
 import { SHIPS, instance, edgeMaterial } from './models.js';
+import { MISSIONS } from './missions.js';
+import {
+  TIME_SCALE, BOLT_SPEED, BOLT_LIFE, MAX_SHOTS, COMM_RANGE, SCORE, COLORS,
+  clamp, orient, turnToward, segDist2,
+} from './common.js';
 
 // Расстояния в километрах, скорости в км/с. Спутники стоят на настоящих
 // орбитах в настоящем масштабе; аркадные допущения — скорость игрока
 // (в десятки раз выше орбитальной) и размеры моделей.
-const TIME_SCALE = 3; // во сколько раз орбитальное движение быстрее реального
 const LOD_RANGE = 1150, LOD_MESHES = 48, NEAR_MAX = 256;
 const BULLET_SPEED = 3000, BULLET_LIFE = 0.34, FIRE_RATE = 9, BULLET_HIT = 14;
-const BOLT_SPEED = 1100, BOLT_LIFE = 1.4, BOLT_HIT = 9, BOLT_DAMAGE = 5;
+const BOLT_HIT = 9, BOLT_DAMAGE = 5;
 const MISSILE_SPEED = 850, MISSILE_LIFE = 7, MISSILE_TURN = 2.6, MISSILE_FUSE = 16;
 const LOCK_RANGE = 3200, LOCK_CONE = 0.2, LOCK_KEEP = 0.38;
 const ALT_BURN = 150, ALT_DEATH = 80, ALT_CEIL = 1800;
-const COMM_RANGE = 2200;
-const MAX_GUARDS = 3, MAX_PARTICLES = 640, MAX_SHOTS = 96;
-const SCORE = { target: 500, starlink: 100, guard: 300, pickup: 50, friendly: -2000 };
+const GUARD_POOL = 8, MAX_PARTICLES = 640;
 
-export const COLORS = { cyan: '#5ef2ff', gold: '#ffb23e', red: '#ff4d5e', green: '#6dffa0', white: '#e8f4ff' };
 const PICKUPS = {
   shield: { color: 0x6dffa0, label: 'ЩИТ +40' },
   fuel: { color: 0xffe066, label: 'ТОПЛИВО +50' },
   missiles: { color: 0xff7ad9, label: 'РАКЕТЫ +4' },
 };
 
-const clamp = THREE.MathUtils.clamp;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
-const _r = new THREE.Vector3(), _u = new THREE.Vector3(), _nf = new THREE.Vector3();
-const _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _col = new THREE.Color();
+const _u = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _col = new THREE.Color();
 const _mouse = { x: 0, y: 0 };
-
-// Ставит объект носом по fwd, верхом по up; roll — крен вокруг продольной оси
-function orient(obj, fwd, up, roll = 0) {
-  _r.crossVectors(fwd, up).normalize();
-  _u.crossVectors(_r, fwd);
-  _m.makeBasis(_r, _u, _nf.copy(fwd).negate());
-  obj.quaternion.setFromRotationMatrix(_m);
-  if (roll) obj.rotateZ(roll);
-}
-
-// Доворачивает единичный вектор cur к target не больше чем на maxAngle
-function turnToward(cur, target, maxAngle) {
-  const angle = cur.angleTo(target);
-  if (angle <= maxAngle) return cur.copy(target);
-  _r.crossVectors(cur, target);
-  if (_r.lengthSq() < 1e-10) _r.set(cur.y, cur.z, cur.x).cross(cur);
-  return cur.applyAxisAngle(_r.normalize(), maxAngle).normalize();
-}
-
-// Квадрат расстояния от точки c до отрезка p → p + d
-function segDist2(p, d, c) {
-  const wx = c.x - p.x, wy = c.y - p.y, wz = c.z - p.z;
-  const dd = d.x * d.x + d.y * d.y + d.z * d.z;
-  let t = dd > 0 ? (wx * d.x + wy * d.y + wz * d.z) / dd : 0;
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  const ex = wx - d.x * t, ey = wy - d.y * t, ez = wz - d.z * t;
-  return ex * ex + ey * ey + ez * ez;
-}
 
 function shotLines(color) {
   const geom = new THREE.BufferGeometry();
@@ -68,7 +40,7 @@ function shotLines(color) {
 }
 
 export class Game {
-  constructor({ renderer, hud, catalog, shipId, audio, input, onFinish }) {
+  constructor({ renderer, hud, catalog, shipId, missionId, audio, input, onFinish }) {
     this.renderer = renderer;
     this.hud = hud;
     this.catalog = catalog;
@@ -114,13 +86,14 @@ export class Game {
     this.buildSatellites();
     this.buildPlayer();
     this.buildPools();
-    this.pickTargets();
+    this.mission = MISSIONS[missionId].create(this);
   }
 
   // ---------- построение сцены ----------
 
   buildSatellites() {
     const { sl, rs } = this;
+    this.targets = []; // аппараты, отмеченные миссией как цели
     this.isTarget = new Uint8Array(sl.count);
     this.satHp = new Map();
     this.rsHp = new Map();
@@ -133,6 +106,7 @@ export class Game {
     this.slPoints = new THREE.Points(geom, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true }));
     this.slPoints.frustumCulled = false;
     this.scene.add(this.slPoints);
+    this.paintTargets();
 
     this.targetEdge = edgeMaterial('#7dfcff');
     this.otherEdge = edgeMaterial('#3d7fd9');
@@ -155,7 +129,19 @@ export class Game {
       this.rsMeshes.push(mesh);
       this.scene.add(mesh);
     }
-    this.comm = { index: -1, dist: Infinity };
+    this.comm = { name: '', dist: Infinity }; // ближайший «свой», от которого идёт связь
+  }
+
+  // Цели на общем облаке точек ярче остальных
+  paintTargets() {
+    const col = this.slColAttr.array;
+    for (let i = 0; i < this.sl.count; i++) {
+      const t = this.isTarget[i];
+      col[i * 3] = t ? 0.55 : 0.3;
+      col[i * 3 + 1] = t ? 1.0 : 0.42;
+      col[i * 3 + 2] = t ? 1.0 : 0.62;
+    }
+    this.slColAttr.needsUpdate = true;
   }
 
   buildPlayer() {
@@ -193,16 +179,14 @@ export class Game {
     this.scene.add(this.bulletLines, this.boltLines);
 
     this.guards = [];
-    for (let k = 0; k < MAX_GUARDS + 2; k++) {
+    for (let k = 0; k < GUARD_POOL; k++) {
       const mesh = instance('guard');
       mesh.scale.setScalar(1.6);
       mesh.visible = false;
       this.scene.add(mesh);
-      this.guards.push({ mesh, alive: false, pos: new THREE.Vector3(), fwd: new THREE.Vector3(), vel: new THREE.Vector3(), breakDir: new THREE.Vector3(), speed: 0, hp: 0, cd: 0, mode: 'attack', timer: 0 });
+      this.guards.push({ mesh, alive: false, pos: new THREE.Vector3(), fwd: new THREE.Vector3(), vel: new THREE.Vector3(), breakDir: new THREE.Vector3(), speed: 0, hp: 0, cd: 0, mode: 'attack', timer: 0, prey: null });
     }
     this.guardsPending = 0;
-    this.nextWaveAt = 1;
-    this.quietTime = 0;
 
     this.missiles = [];
     for (let k = 0; k < 8; k++) {
@@ -254,116 +238,20 @@ export class Game {
     this.scene.add(this.dust);
   }
 
-  // Цели миссии: аппараты одной орбитальной плоскости оболочки 53°
-  pickTargets() {
-    const sl = this.sl, bins = new Map(), pl = {};
-    for (let i = 0; i < sl.count; i++) {
-      if (!sl.alive[i]) continue;
-      const alt = sl.radius[i] - R_EARTH;
-      if (alt < 470 || alt > 600) continue;
-      sl.plane(i, pl);
-      if (Math.abs(pl.inc - 53.1) > 0.4) continue;
-      const key = Math.floor(pl.raan / 2);
-      if (!bins.has(key)) bins.set(key, []);
-      bins.get(key).push({ i, raan: pl.raan, r: sl.radius[i] });
-    }
-    // В двухградусное окно попадают соседние плоскости и аппараты на других
-    // высотах: оставляем тех, кто рядом с медианой окна
-    const median = (arr, f) => arr.map(f).sort((x, y) => x - y)[arr.length >> 1];
-    const pool = [...bins.values()].sort(() => Math.random() - 0.5);
-    let group = [];
-    for (const bin of pool) {
-      const raan = median(bin, (o) => o.raan), r = median(bin, (o) => o.r);
-      const tight = bin.filter((o) => Math.abs(o.raan - raan) < 0.4 && Math.abs(o.r - r) < 25);
-      if (tight.length > group.length) group = tight;
-      if (tight.length >= 14) break;
-    }
-    group = group.map((o) => o.i);
-    if (!group.length) {
-      for (let i = 0; i < sl.count && group.length < 16; i++) if (sl.alive[i]) group.push(i);
-    }
-
-    // Средняя плоскость и фаза каждого аппарата в ней
-    const normal = new THREE.Vector3();
-    let radius = 0;
-    for (const i of group) {
-      normal.add(sl.normal(i, _a));
-      radius += sl.radius[i];
-    }
-    normal.normalize();
-    radius /= group.length;
-    const u = sl.position(group[0], new THREE.Vector3()).projectOnPlane(normal).normalize();
-    const v = new THREE.Vector3().crossVectors(normal, u);
-    const phase = (i) => {
-      sl.position(i, _a);
-      return Math.atan2(_a.dot(v), _a.dot(u));
-    };
-    group = group.map((i) => ({ i, ph: (phase(i) + Math.PI * 2) % (Math.PI * 2) })).sort((x, y) => x.ph - y.ph).map((o) => o.i);
-    // Больше двадцати целей не берём: прореживаем равномерно по кольцу
-    if (group.length > 20) {
-      const step = group.length / 20;
-      group = Array.from({ length: 20 }, (_, k) => group[Math.floor(k * step)]);
-    }
-
-    this.targets = group;
-    this.targetsLeft = group.length;
-    for (const i of group) this.isTarget[i] = 1;
-    const col = this.slColAttr.array;
-    for (let i = 0; i < sl.count; i++) {
-      const t = this.isTarget[i];
-      col[i * 3] = t ? 0.55 : 0.3;
-      col[i * 3 + 1] = t ? 1.0 : 0.42;
-      col[i * 3 + 2] = t ? 1.0 : 0.62;
-    }
-    this.slColAttr.needsUpdate = true;
-
-    sl.plane(group[0], pl);
-    this.plane = { normal, u, v, radius, inc: pl.inc, raan: pl.raan, alt: radius - R_EARTH, count: group.length, names: group.map((i) => sl.names[i]) };
-
-    // Линия орбиты целей — ориентир в полёте
-    const pts = [];
-    for (let k = 0; k <= 256; k++) {
-      const ang = (k / 256) * Math.PI * 2;
-      pts.push(_a.copy(u).multiplyScalar(Math.cos(ang) * radius).addScaledVector(v, Math.sin(ang) * radius).clone());
-    }
-    this.ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2aa4c4, transparent: true, opacity: 0.55 }));
-    this.ring.frustumCulled = false;
-    this.scene.add(this.ring);
-  }
-
   // ---------- запуск ----------
 
   start() {
-    const { sl, rs, player: p, plane } = this;
+    const { sl, rs, player: p } = this;
     this.simT0 = (Date.now() - this.catalog.epoch.getTime()) / 1000;
     this.orbitT = this.simT0;
     sl.update(this.orbitT);
     rs.update(this.orbitT);
 
-    // Старт на линии орбиты, курс по движению аппаратов. Точку выбираем в самом
-    // широком промежутке между целями, за 1600 км до ближайшей впереди.
-    const phases = this.targets
-      .map((i) => {
-        sl.position(i, _a);
-        return Math.atan2(_a.dot(plane.v), _a.dot(plane.u));
-      })
-      .sort((x, y) => x - y);
-    let phase = phases[0], widest = 0;
-    for (let k = 0; k < phases.length; k++) {
-      const next = phases[(k + 1) % phases.length];
-      const gap = (next - phases[k] + Math.PI * 2) % (Math.PI * 2) || Math.PI * 2;
-      if (gap > widest) {
-        widest = gap;
-        phase = next - Math.min(1600 / plane.radius, gap * 0.6);
-      }
-    }
-    p.pos.copy(plane.u).multiplyScalar(Math.cos(phase)).addScaledVector(plane.v, Math.sin(phase)).multiplyScalar(plane.radius);
-    p.fwd.copy(plane.u).multiplyScalar(-Math.sin(phase)).addScaledVector(plane.v, Math.cos(phase));
+    const hello = this.mission.placePlayer(p);
     this.camFwd.copy(p.fwd);
-
     this.state = 'play';
     this.endTimer = 0;
-    this.say('ЦЕЛИ ВПЕРЕДИ ПО КУРСУ. ДЕРЖИТЕСЬ ЛИНИИ ОРБИТЫ', COLORS.cyan);
+    this.say(hello, COLORS.cyan);
     this.update(0);
   }
 
@@ -382,18 +270,30 @@ export class Game {
     if (this.messages.length > 5) this.messages.shift();
   }
 
-  // ---------- цели: спутник или перехватчик ----------
+  // ---------- цель захвата: перехватчик, узел босса или спутник ----------
 
   targetAlive(t) {
-    return t.guard ? t.guard.alive : this.sl.alive[t.sat] === 1;
+    if (t.guard) return t.guard.alive;
+    if (t.part) return t.part.alive && t.part.open;
+    return this.sl.alive[t.sat] === 1;
   }
 
   targetPos(t, out) {
-    return t.guard ? out.copy(t.guard.pos) : this.sl.position(t.sat, out);
+    if (t.guard) return out.copy(t.guard.pos);
+    if (t.part) return out.copy(t.part.pos);
+    return this.sl.position(t.sat, out);
   }
 
   targetVel(t, out) {
-    return t.guard ? out.copy(t.guard.vel) : this.sl.velocity(t.sat, this.orbitT, out).multiplyScalar(TIME_SCALE);
+    if (t.guard) return out.copy(t.guard.vel);
+    if (t.part) return out.copy(t.part.vel);
+    return this.sl.velocity(t.sat, this.orbitT, out).multiplyScalar(TIME_SCALE);
+  }
+
+  damageTarget(t, dmg) {
+    if (t.guard) this.damageGuard(t.guard, dmg);
+    else if (t.part) this.mission.damagePart(t.part, dmg);
+    else this.damageSat(t.sat, dmg);
   }
 
   // ---------- игрок ----------
@@ -514,8 +414,9 @@ export class Game {
       const i = this.nearIdx[k];
       if (!this.isTarget[i]) consider({ sat: i }, 0);
     }
+    this.mission.lockCandidates(consider);
     cands.sort((x, y) => x.key - y.key);
-    const same = (x, y) => x && y && x.guard === y.guard && x.sat === y.sat;
+    const same = (x, y) => x && y && x.guard === y.guard && x.sat === y.sat && x.part === y.part;
 
     if (inp.pressed('Tab') || inp.pressed('KeyT')) {
       const k = cands.findIndex((c) => same(c.t, p.lock));
@@ -553,7 +454,7 @@ export class Game {
       const tv = this.targetVel(p.lock, _d).sub(p.vel);
       const time = tp.distanceTo(muzzle) / BULLET_SPEED;
       tp.addScaledVector(tv, time).sub(muzzle).normalize();
-      if (tp.angleTo(p.fwd) < (p.lock.guard ? 0.1 : 0.07)) dir.copy(tp);
+      if (tp.angleTo(p.fwd) < (p.lock.sat === undefined ? 0.1 : 0.07)) dir.copy(tp);
     }
     const vel = dir.multiplyScalar(BULLET_SPEED).add(p.vel);
     if (this.bullets.length < MAX_SHOTS) this.bullets.push({ pos: muzzle, vel, life: BULLET_LIFE });
@@ -586,7 +487,7 @@ export class Game {
     for (let b = this.bullets.length - 1; b >= 0; b--) {
       const bul = this.bullets[b];
       const step = _d.copy(bul.vel).multiplyScalar(dt);
-      let hit = false;
+      let hit = false, spent = false;
       for (const g of this.guards) {
         if (g.alive && segDist2(bul.pos, step, g.pos) < 18 * 18) {
           this.damageGuard(g, 1);
@@ -607,20 +508,26 @@ export class Game {
           hit = true;
         }
       }
+      if (!hit) {
+        const res = this.mission.bulletHit(bul, step);
+        hit = res === 1;
+        spent = res === 2;
+      }
       bul.pos.add(step);
       bul.life -= dt;
       if (hit) this.stats.hits++;
-      if (hit || bul.life <= 0) this.bullets.splice(b, 1);
+      if (hit || spent || bul.life <= 0) this.bullets.splice(b, 1);
     }
 
     for (let b = this.bolts.length - 1; b >= 0; b--) {
       const bolt = this.bolts[b];
       // В системе отсчёта игрока: он сам за кадр успевает сместиться
       const rel = _d.copy(bolt.vel).sub(p.vel).multiplyScalar(dt);
-      const hit = this.state === 'play' && segDist2(bolt.pos, rel, p.pos) < BOLT_HIT * BOLT_HIT;
+      let hit = this.state === 'play' && segDist2(bolt.pos, rel, p.pos) < BOLT_HIT * BOLT_HIT;
+      if (hit) this.damagePlayer(BOLT_DAMAGE);
+      else hit = this.mission.boltHit(bolt, _d.copy(bolt.vel).multiplyScalar(dt));
       bolt.pos.addScaledVector(bolt.vel, dt);
       bolt.life -= dt;
-      if (hit) this.damagePlayer(BOLT_DAMAGE);
       if (hit || bolt.life <= 0) this.bolts.splice(b, 1);
     }
 
@@ -653,8 +560,7 @@ export class Game {
         const tp = this.targetPos(m.target, _c);
         const dist = tp.distanceTo(m.pos);
         if (dist < MISSILE_FUSE + MISSILE_SPEED * dt) {
-          if (m.target.guard) this.damageGuard(m.target.guard, 9);
-          else this.damageSat(m.target.sat, 9);
+          this.damageTarget(m.target, 9);
           this.stats.hits++;
           boom = true;
         } else {
@@ -696,23 +602,7 @@ export class Game {
     this.stats.kills++;
     if (p.lock && p.lock.sat === i) p.lock = null;
     this.explode(pos, 1, 0x9fe8ff);
-    const name = sl.names[i];
-    if (this.isTarget[i]) {
-      this.targetsLeft--;
-      this.stats.targets++;
-      this.score += SCORE.target;
-      this.say(`${rammed ? 'ТАРАН' : 'ЦЕЛЬ УНИЧТОЖЕНА'}: ${name}`, COLORS.cyan);
-      if (Math.random() < 0.4) this.dropPickup(pos);
-      if (this.stats.targets >= this.nextWaveAt && this.targetsLeft > 0) {
-        this.nextWaveAt += 3;
-        this.callGuards(this.stats.targets === 1 ? 1 : this.targetsLeft <= 4 ? 3 : 2);
-      }
-      if (this.targetsLeft === 0) this.win();
-    } else {
-      this.score += SCORE.starlink;
-      this.say(`СБИТ ${name}  +${SCORE.starlink}`, '#8fb4e8');
-      if (Math.random() < 0.15) this.dropPickup(pos);
-    }
+    this.mission.onSatKilled(i, pos, rammed);
   }
 
   damageFriendly(i) {
@@ -747,29 +637,37 @@ export class Game {
     this.stats.guards++;
     this.score += SCORE.guard;
     this.explode(g.pos, 1.2, 0xff7050);
-    this.say(`ПЕРЕХВАТЧИК СБИТ  +${SCORE.guard}`, COLORS.red);
+    this.say(`${this.mission.guardName} СБИТ  +${SCORE.guard}`, COLORS.red);
     if (Math.random() < 0.5) this.dropPickup(g.pos);
+    this.mission.onGuardKilled(g);
   }
 
-  // ---------- охрана ----------
+  // ---------- перехватчики ----------
 
-  callGuards(n) {
-    this.guardsPending += n;
-    this.say('ВНИМАНИЕ: ПЕРЕХВАТЧИКИ ОХРАНЫ', COLORS.red);
-    this.audio.alarm();
+  guardsAlive() {
+    let n = 0;
+    for (const g of this.guards) if (g.alive) n++;
+    return n;
   }
 
-  spawnGuard() {
+  // Перехватчик появляется в точке pos или, если она не задана, впереди по курсу игрока.
+  // prey — за кем он охотится (объект с pos, vel и alive); по умолчанию за игроком.
+  spawnGuard({ pos = null, prey = null } = {}) {
     const g = this.guards.find((x) => !x.alive);
     if (!g) return false;
     const p = this.player;
-    const up = _a.copy(p.pos).normalize();
-    const right = _b.crossVectors(p.fwd, up).normalize();
-    g.pos.copy(p.pos)
-      .addScaledVector(p.fwd, 1500 + Math.random() * 500)
-      .addScaledVector(right, (Math.random() - 0.5) * 1600);
-    g.pos.setLength(clamp(p.pos.length() + (Math.random() - 0.5) * 200, R_EARTH + 320, R_EARTH + 1200));
-    g.fwd.subVectors(p.pos, g.pos).normalize();
+    if (pos) {
+      g.pos.copy(pos);
+    } else {
+      const up = _a.copy(p.pos).normalize();
+      const right = _b.crossVectors(p.fwd, up).normalize();
+      g.pos.copy(p.pos)
+        .addScaledVector(p.fwd, 1500 + Math.random() * 500)
+        .addScaledVector(right, (Math.random() - 0.5) * 1600);
+      g.pos.setLength(clamp(p.pos.length() + (Math.random() - 0.5) * 200, R_EARTH + 320, R_EARTH + 1200));
+    }
+    g.prey = prey;
+    g.fwd.subVectors((prey ?? p).pos, g.pos).normalize();
     g.vel.set(0, 0, 0);
     g.speed = 260;
     g.hp = 4;
@@ -782,25 +680,20 @@ export class Game {
 
   updateGuards(dt) {
     const p = this.player;
-    let alive = 0;
-    for (const g of this.guards) if (g.alive) alive++;
     if (this.state === 'play') {
-      while (this.guardsPending > 0 && alive < MAX_GUARDS && this.spawnGuard()) {
+      let alive = this.guardsAlive();
+      while (this.guardsPending > 0 && alive < this.mission.maxGuards && this.spawnGuard()) {
         this.guardsPending--;
         alive++;
-      }
-      // В затишье охрана всё равно подтягивается
-      this.quietTime = alive ? 0 : this.quietTime + dt;
-      if (this.quietTime > 28 && this.stats.targets > 0) {
-        this.quietTime = 0;
-        this.callGuards(1);
       }
     }
 
     for (const g of this.guards) {
       if (!g.alive) continue;
-      const toPlayer = _a.subVectors(p.pos, g.pos);
-      const dist = toPlayer.length();
+      const prey = g.prey && g.prey.alive ? g.prey : p; // добыча погибла — остаётся игрок
+      const toPrey = _a.subVectors(prey.pos, g.pos);
+      const dist = toPrey.length();
+      const toPlayer = g.pos.distanceTo(p.pos);
       if (dist > 7000) {
         // Отстал: вернётся со следующей волной
         g.alive = false;
@@ -808,13 +701,14 @@ export class Game {
         this.guardsPending++;
         continue;
       }
-      const closing = (g.vel.dot(toPlayer) - p.vel.dot(toPlayer)) / dist; // скорость сближения
+      const closing = (g.vel.dot(toPrey) - prey.vel.dot(toPrey)) / dist; // скорость сближения
       const up = _c.copy(g.pos).normalize();
-      const aim = _b.copy(p.pos).addScaledVector(p.vel, dist / BOLT_SPEED).sub(g.pos).normalize();
+      const aim = _b.copy(prey.pos).addScaledVector(prey.vel, dist / BOLT_SPEED).sub(g.pos).normalize();
       const want = _d.copy(aim);
+      const tooClose = prey === p ? 160 : 280; // крупную добычу облетает по большему радиусу
       if (g.mode === 'attack') {
         // Отворачивает за секунду до столкновения, иначе на встречных курсах таранит
-        if (dist < 160 || dist < closing || this.state !== 'play') {
+        if (dist < tooClose || dist < closing || this.state !== 'play') {
           g.mode = 'break';
           g.timer = 1.4 + Math.random();
           g.breakDir.crossVectors(aim, up).multiplyScalar(Math.random() < 0.5 ? 1 : -1).addScaledVector(up, 0.3).normalize();
@@ -845,11 +739,11 @@ export class Game {
         if (this.bolts.length < MAX_SHOTS) {
           this.bolts.push({ pos: new THREE.Vector3().copy(g.pos).addScaledVector(dir, 5), vel: dir.multiplyScalar(BOLT_SPEED), life: BOLT_LIFE });
         }
-        if (dist < 700) this.audio.bolt();
+        if (toPlayer < 700) this.audio.bolt();
       }
 
       // Столкновение с игроком
-      if (dist < 9 && this.state === 'play') {
+      if (toPlayer < 9 && this.state === 'play') {
         this.damageGuard(g, 99);
         this.damagePlayer(25);
         continue;
@@ -1026,7 +920,7 @@ export class Game {
       mesh.visible = true;
     }
 
-    this.comm.index = -1;
+    this.comm.name = '';
     this.comm.dist = Infinity;
     for (let i = 0; i < rs.count; i++) {
       const mesh = this.rsMeshes[i];
@@ -1037,9 +931,10 @@ export class Game {
       const dist = mesh.position.distanceTo(p.pos);
       if (dist < this.comm.dist) {
         this.comm.dist = dist;
-        this.comm.index = i;
+        this.comm.name = rs.names[i];
       }
     }
+    this.mission.updateComm(this.comm, p);
   }
 
   // ---------- исход ----------
@@ -1049,33 +944,33 @@ export class Game {
     this.state = 'won';
     this.endTimer = 3;
     this.score += Math.max(0, Math.round((360 - this.t) * 5)) + Math.round(this.player.hull * 5);
-    this.say('ПЛОСКОСТЬ ЗАЧИЩЕНА', COLORS.gold);
+    this.say(this.mission.winText, COLORS.gold);
     this.audio.fanfare(true);
   }
 
-  lose(reason) {
+  // shipLost = false — миссия провалена, но сам аппарат цел
+  lose(reason, shipLost = true) {
     if (this.state !== 'play') return;
     this.state = 'lost';
     this.reason = reason;
+    this.shipLost = shipLost;
     this.endTimer = 3;
-    this.shipMesh.visible = false;
-    this.explode(this.player.pos, 2, 0xffa040);
-    this.player.speed *= 0.3;
+    if (shipLost) {
+      this.shipMesh.visible = false;
+      this.explode(this.player.pos, 2, 0xffa040);
+      this.player.speed *= 0.3;
+    }
     this.audio.fanfare(false);
   }
 
   result() {
-    const s = this.stats;
+    const s = this.stats, won = this.state === 'won';
     return {
-      won: this.state === 'won',
-      reason: this.reason ?? '',
+      won,
+      title: won ? this.mission.winTitle : this.reason ?? '',
       score: this.score,
       time: this.t,
-      targets: s.targets,
-      targetsTotal: this.targets.length,
-      kills: s.kills,
-      guards: s.guards,
-      friendly: s.friendly,
+      facts: this.mission.resultFacts(),
       accuracy: s.shots ? s.hits / s.shots : 0,
     };
   }
@@ -1097,6 +992,7 @@ export class Game {
     if (this.state === 'play') this.updatePlayer(dt);
     else this.movePlayer(dt);
     this.updateNear();
+    this.mission.update(dt);
     if (this.state === 'play') this.updateLock();
     this.updateGuards(dt);
     this.updateBullets(dt);
@@ -1148,7 +1044,7 @@ export class Game {
       cam.updateProjectionMatrix();
     }
     cam.updateMatrixWorld();
-    this.shipMesh.visible = !this.cockpit && this.state !== 'lost';
+    this.shipMesh.visible = !this.cockpit && !(this.state === 'lost' && this.shipLost);
     this.sky.position.copy(cam.position);
   }
 
@@ -1160,7 +1056,8 @@ export class Game {
   dispose() {
     this.audio.engine(0, false, false);
     // Геометрия и материалы моделей общие с меню, освобождаем только своё
-    const own = [this.slPoints, this.ring, this.bulletLines, this.boltLines, this.particles, this.dust, this.earth.air, ...this.earth.group.children, ...this.sky.children];
+    this.mission.dispose();
+    const own = [this.slPoints, this.bulletLines, this.boltLines, this.particles, this.dust, this.earth.air, ...this.earth.group.children, ...this.sky.children];
     for (const o of own) {
       o.geometry.dispose();
       o.material.dispose();

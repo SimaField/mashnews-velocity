@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { R_EARTH, subPoint, formatLatLon } from './orbits.js';
-import { COLORS } from './game.js';
+import { COLORS, COMM_RANGE } from './common.js';
 
 const FONT = '"Cascadia Mono", Consolas, "Courier New", monospace';
 const RADAR_RANGE = 1500;
@@ -164,6 +164,7 @@ export class Hud {
     this.drawGauges(game);
     this.drawRadar(game);
     this.drawStatus(game);
+    game.mission.drawBars(this);
 
     if (game.damageFlash > 0) {
       const grad = g.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.75);
@@ -229,6 +230,8 @@ export class Hud {
       else if (playing) this.edgeArrow(s, COLORS.red, `${Math.round(dist)}`);
     }
 
+    game.mission.drawMarkers(this);
+
     // Захваченная цель
     const lock = p.lock;
     if (lock && game.targetAlive(lock) && playing) {
@@ -236,14 +239,17 @@ export class Hud {
       const dist = _p.distanceTo(p.pos);
       const s = this.toScreen(_p, cam);
       if (s.on) {
-        const color = lock.guard ? COLORS.red : COLORS.white;
+        const color = lock.sat === undefined ? COLORS.red : COLORS.white;
         const size = THREE.MathUtils.clamp(9000 / dist, 16, 46);
         const x = s.x, y = s.y;
         this.brackets(x, y, size, color, 2);
         const tx = x + size + 10;
         if (lock.guard) {
-          this.text('ПЕРЕХВАТЧИК ОХРАНЫ', tx, y - 6, color, 12);
+          this.text(game.mission.guardName, tx, y - 6, color, 12);
           this.text(`${Math.round(dist)} км · БРОНЯ ${lock.guard.hp}/4`, tx, y + 10, color, 11);
+        } else if (lock.part) {
+          this.text(`STARSHIP · ${lock.part.label}`, tx, y - 6, color, 12);
+          this.text(`${Math.round(dist)} км · ПРОЧНОСТЬ ${lock.part.hp}/${lock.part.max}`, tx, y + 10, color, 11);
         } else {
           const i = lock.sat;
           subPoint(_p.x, _p.y, _p.z, game.gmst, _geo);
@@ -340,6 +346,8 @@ export class Hud {
     for (const kk of game.pickups) if (kk.alive) plot(kk.pos, COLORS.green, 3);
     for (const gd of game.guards) if (gd.alive) plot(gd.pos, COLORS.red, 5, true);
 
+    game.mission.radar(plot);
+
     g.fillStyle = COLORS.white;
     g.beginPath();
     g.moveTo(cx, cy - 6);
@@ -351,16 +359,16 @@ export class Hud {
   }
 
   drawStatus(game) {
-    const { player: p, rs } = game, w = this.w, h = this.h;
-    const total = game.targets.length, done = total - game.targetsLeft;
+    const p = game.player, w = this.w, h = this.h;
+    const status = game.mission.status();
     this.plate(12, 12, 244, 76);
-    this.text('МИССИЯ 01 · ПЕРЕХВАТ', 24, 30, 'rgba(94,242,255,.65)', 10);
-    this.text(`ЦЕЛИ ${String(done).padStart(2, '0')}/${total}`, 24, 56, COLORS.cyan, 22, 'left', 700);
+    this.text(status.title, 24, 30, 'rgba(94,242,255,.65)', 10);
+    this.text(status.big, 24, 56, COLORS.cyan, 22, 'left', 700);
     this.text(`СЧЁТ ${game.score}   ВРЕМЯ ${mmss(game.t)}`, 24, 76, COLORS.cyan, 12);
 
-    const linked = game.comm.dist < 2200 && game.comm.index >= 0;
+    const linked = game.comm.dist < COMM_RANGE && game.comm.name !== '';
     if (linked) {
-      this.text(`СВЯЗЬ · ${rs.names[game.comm.index]} · ${Math.round(game.comm.dist)} км`, w - 24, 30, COLORS.gold, 11, 'right');
+      this.text(`СВЯЗЬ · ${game.comm.name} · ${Math.round(game.comm.dist)} км`, w - 24, 30, COLORS.gold, 11, 'right');
       this.text('щит восстанавливается быстрее', w - 24, 46, 'rgba(255,178,62,.7)', 10, 'right');
     } else {
       this.text('НЕТ СВЯЗИ С ГРУППИРОВКОЙ', w - 24, 30, 'rgba(160,180,210,.7)', 11, 'right');
@@ -382,6 +390,6 @@ export class Hud {
       this.text(game.warning, w / 2, Math.round(h * 0.22), COLORS.red, 20, 'center', 700);
     }
     if (game.state === 'won') this.text('ЗАДАЧА ВЫПОЛНЕНА', w / 2, h * 0.42, COLORS.gold, 34, 'center', 700);
-    if (game.state === 'lost') this.text('АППАРАТ ПОТЕРЯН', w / 2, h * 0.42, COLORS.red, 34, 'center', 700);
+    if (game.state === 'lost') this.text(game.shipLost ? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.42, COLORS.red, 34, 'center', 700);
   }
 }

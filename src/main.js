@@ -6,10 +6,14 @@ import { Hud } from './hud.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
 import { SHIPS } from './models.js';
+import { MISSIONS } from './missions.js';
 import { formatLatLon } from './orbits.js';
 
 const $ = (id) => document.getElementById(id);
 const num = (n) => n.toLocaleString('ru-RU');
+// Имена аппаратов приходят из внешнего каталога, поэтому в разметку идут только экранированными
+const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const factRows = (rows) => rows.map(([k, v, cls]) => `<dt>${esc(k)}</dt><dd${cls ? ` class="${cls}"` : ''}>${esc(v)}</dd>`).join('');
 
 const glCanvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: false, powerPreference: 'high-performance' });
@@ -21,6 +25,7 @@ let catalog = null, menu = null, game = null;
 let mode = 'loading'; // loading | menu | game
 let paused = false;
 let shipId = 'spiral';
+let missionId = 'intercept';
 
 function show(name) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('hidden', el.id !== `s-${name}`);
@@ -85,20 +90,18 @@ function newGame() {
   // Бой начинается с настоящего положения аппаратов на текущий момент
   resyncNow();
   setSpeed(1);
-  game = new Game({ renderer, hud, catalog, shipId, audio, input, onFinish: showResult });
+  game = new Game({ renderer, hud, catalog, shipId, missionId, audio, input, onFinish: showResult });
 }
 
 function toBriefing() {
   newGame();
-  const pl = game.plane;
-  const names = pl.names.slice(0, 5).join(', ') + (pl.count > 5 ? ` и ещё ${pl.count - 5}` : '');
-  $('brief-facts').innerHTML = `
-    <dt>Аппарат</dt><dd class="gold">${SHIPS[shipId].name}</dd>
-    <dt>Целей</dt><dd>${pl.count}</dd>
-    <dt>Наклонение</dt><dd>${pl.inc.toFixed(1)}°</dd>
-    <dt>Восходящий узел</dt><dd>${pl.raan.toFixed(1)}°</dd>
-    <dt>Высота</dt><dd>${Math.round(pl.alt)} км</dd>
-    <dt>Состав</dt><dd>${names}</dd>`;
+  const meta = MISSIONS[missionId], brief = game.mission.briefing();
+  $('brief-eyebrow').textContent = `Миссия ${meta.number}`;
+  $('brief-title').textContent = meta.name;
+  $('brief-text').textContent = brief.text;
+  $('brief-hint').textContent = brief.hint;
+  $('brief-facts').innerHTML = factRows([['Аппарат', SHIPS[shipId].name, 'gold'], ...brief.facts]);
+  for (const b of $('missions').children) b.classList.toggle('on', b.dataset.mission === missionId);
   menu.setPreview(null);
   show('briefing');
 }
@@ -144,25 +147,25 @@ function setPaused(value) {
 function showResult(res) {
   input.enabled = false;
   if (document.pointerLockElement) document.exitPointerLock();
+  // Рекорд у каждой миссии свой; у первой ключ остался прежним
+  const bestKey = missionId === 'intercept' ? 'dv-best' : `dv-best-${missionId}`;
   let best = 0;
   try {
-    best = Number(localStorage.getItem('dv-best')) || 0;
-    if (res.score > best) localStorage.setItem('dv-best', String(res.score));
+    best = Number(localStorage.getItem(bestKey)) || 0;
+    if (res.score > best) localStorage.setItem(bestKey, String(res.score));
   } catch {
     // хранилище недоступно — обойдёмся без рекорда
   }
   const t = Math.round(res.time);
   $('res-eyebrow').textContent = res.won ? 'Миссия выполнена' : 'Миссия провалена';
-  $('res-title').textContent = res.won ? 'Плоскость зачищена' : res.reason;
-  $('res-facts').innerHTML = `
-    <dt>Счёт</dt><dd class="gold">${num(res.score)}${res.score > best && best > 0 ? ' · рекорд' : ''}</dd>
-    <dt>Лучший результат</dt><dd>${num(Math.max(best, res.score))}</dd>
-    <dt>Цели миссии</dt><dd>${res.targets} из ${res.targetsTotal}</dd>
-    <dt>Всего сбито Starlink</dt><dd>${res.kills}</dd>
-    <dt>Перехватчики</dt><dd>${res.guards}</dd>
-    <dt>Потеряно своих</dt><dd>${res.friendly}</dd>
-    <dt>Точность пушки</dt><dd>${Math.round(res.accuracy * 100)}%</dd>
-    <dt>Время</dt><dd>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</dd>`;
+  $('res-title').textContent = res.title;
+  $('res-facts').innerHTML = factRows([
+    ['Счёт', `${num(res.score)}${res.score > best && best > 0 ? ' · рекорд' : ''}`, 'gold'],
+    ['Лучший результат', num(Math.max(best, res.score))],
+    ...res.facts,
+    ['Точность пушки', `${Math.round(res.accuracy * 100)}%`],
+    ['Время', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`],
+  ]);
   show('result');
 }
 
@@ -213,6 +216,21 @@ function bind() {
     audio.unlock();
     audio.click();
     menu.setSpin(e.target.checked);
+  });
+  // Выбор миссии на экране брифинга: бой пересоздаётся под выбранный сценарий
+  $('missions').innerHTML = Object.values(MISSIONS).map((m) => `<button data-mission="${m.id}">${m.number} · ${m.name}</button>`).join('');
+  if (!catalog.iss) {
+    const defend = $('missions').querySelector('[data-mission="defend"]');
+    defend.disabled = true;
+    defend.title = 'Нет данных об орбите МКС';
+  }
+  $('missions').addEventListener('click', (e) => {
+    const id = e.target.dataset.mission;
+    if (!id || id === missionId || e.target.disabled) return;
+    audio.unlock();
+    audio.click();
+    missionId = id;
+    toBriefing();
   });
   $('speeds').addEventListener('click', (e) => {
     if (e.target.dataset.speed) setSpeed(Number(e.target.dataset.speed));
