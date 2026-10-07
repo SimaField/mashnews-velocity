@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dawn Velocity — орбитальная аркада</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <canvas id="hud"></canvas>
+
+  <div id="ui">
+    <section id="s-loading" class="screen center">
+      <div class="loading">
+        <div class="logo small"><span>DAWN</span><span>VELOCITY</span></div>
+        <p id="load-text">Загрузка каталога орбит…</p>
+      </div>
+    </section>
+
+    <section id="s-title" class="screen hidden">
+      <div class="col">
+        <div class="eyebrow">Орбитальная аркада</div>
+        <h1 class="logo"><span>DAWN</span><span>VELOCITY</span></h1>
+        <p class="lead">Три десятка «Рассветов» против одиннадцати тысяч Starlink. Орбиты настоящие, всё остальное — аркада.</p>
+        <div class="stats">
+          <div class="stat gold"><b id="st-rassvet">—</b><span>«Рассвет» на орбите</span></div>
+          <div class="stat blue"><b id="st-starlink">—</b><span>Starlink на орбите</span></div>
+        </div>
+        <nav class="menu">
+          <button class="btn primary" id="b-play">В бой</button>
+          <button class="btn" id="b-help">Управление</button>
+        </nav>
+      </div>
+      <div class="timebar panel">
+        <div class="clock">
+          <span class="label">Время модели</span>
+          <span id="clock">—</span>
+        </div>
+        <div class="seg" id="speeds">
+          <button data-speed="1">1×</button>
+          <button data-speed="60" class="on">60×</button>
+          <button data-speed="600">600×</button>
+        </div>
+        <button class="btn ghost" id="b-now">Сейчас</button>
+      </div>
+      <footer class="fine">
+        <span id="data-line"></span>
+        <span>Неофициальный фан-проект. Не связан с ООО «Бюро 1440» и SpaceX.</span>
+      </footer>
+    </section>
+
+    <section id="s-hangar" class="screen hidden">
+      <div class="col">
+        <div class="eyebrow">Шаг 1 из 2</div>
+        <h2>Выбор аппарата</h2>
+        <div class="ships" id="ships"></div>
+        <div class="panel detail">
+          <p id="ship-desc"></p>
+          <div class="bars" id="ship-bars"></div>
+        </div>
+        <nav class="menu row">
+          <button class="btn" id="b-hangar-back">Назад</button>
+          <button class="btn primary" id="b-hangar-next">К брифингу</button>
+        </nav>
+      </div>
+    </section>
+
+    <section id="s-briefing" class="screen hidden">
+      <div class="col">
+        <div class="eyebrow">Миссия 01</div>
+        <h2>Перехват</h2>
+        <div class="panel detail">
+          <p>Одна орбитальная плоскость Starlink проходит сквозь рабочие высоты «Рассвета». Пройдите вдоль неё и уничтожьте все отмеченные аппараты. После первых потерь противник поднимет перехватчики охраны.</p>
+          <dl class="facts" id="brief-facts"></dl>
+          <p class="hint">Рядом с «Рассветом» щит восстанавливается быстрее. По своим не стрелять: штраф 2000 очков.</p>
+        </div>
+        <nav class="menu row">
+          <button class="btn" id="b-brief-back">Назад</button>
+          <button class="btn primary" id="b-start">Старт</button>
+        </nav>
+      </div>
+    </section>
+
+    <section id="s-help" class="screen overlay hidden">
+      <div class="panel dialog">
+        <h2>Управление</h2>
+        <dl class="keys">
+          <dt>Мышь</dt><dd>курс; курсор захватывается после щелчка по экрану</dd>
+          <dt>W A S D, ← → ↑ ↓</dt><dd>курс с клавиатуры: W — вверх, S — вниз</dd>
+          <dt>Shift</dt><dd>форсаж, расходует топливо</dd>
+          <dt>Пробел, ЛКМ</dt><dd>пушка</dd>
+          <dt>F, ПКМ</dt><dd>ракета по захваченной цели</dd>
+          <dt>Tab, T</dt><dd>следующая цель</dd>
+          <dt>V</dt><dd>вид из кабины</dd>
+          <dt>F2</dt><dd>крупный пиксель или чёткая картинка</dd>
+          <dt>M</dt><dd>звук</dd>
+          <dt>Esc, P</dt><dd>пауза</dd>
+        </dl>
+        <nav class="menu row"><button class="btn primary" id="b-help-close">Понятно</button></nav>
+      </div>
+    </section>
+
+    <section id="s-pause" class="screen overlay hidden">
+      <div class="panel dialog narrow">
+        <h2>Пауза</h2>
+        <nav class="menu">
+          <button class="btn primary" id="b-resume">Продолжить</button>
+          <button class="btn" id="b-restart">Начать заново</button>
+          <button class="btn" id="b-quit">В меню</button>
+        </nav>
+      </div>
+    </section>
+
+    <section id="s-result" class="screen overlay hidden">
+      <div class="panel dialog narrow">
+        <div class="eyebrow" id="res-eyebrow"></div>
+        <h2 id="res-title"></h2>
+        <dl class="facts" id="res-facts"></dl>
+        <nav class="menu">
+          <button class="btn primary" id="b-again">Ещё раз</button>
+          <button class="btn" id="b-result-quit">В меню</button>
+        </nav>
+      </div>
+    </section>
+
+    <div id="tip" class="tip hidden"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
