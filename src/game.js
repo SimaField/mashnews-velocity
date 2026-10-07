@@ -63,8 +63,6 @@ export class Game {
     this.damageFlash = 0;
     this.shake = 0;
     this.cockpit = false;
-    this.pixelScale = 3;
-    this.sharp = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x02040a);
@@ -258,12 +256,11 @@ export class Game {
   resize(w, h) {
     this.w = w;
     this.h = h;
-    // На телефоне экран и так невысокий: буфер в полный размер уже даёт крупный пиксель
-    this.pixelScale = this.sharp || h < 540 ? 1 : Math.max(2, Math.round(h / 400));
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // Сцена рисуется в размер окна, без уменьшения под «крупный пиксель»
     this.renderer.setPixelRatio(1);
-    this.renderer.setSize(Math.ceil(w / this.pixelScale), Math.ceil(h / this.pixelScale), false);
+    this.renderer.setSize(w, h, false);
   }
 
   say(text, color = COLORS.cyan) {

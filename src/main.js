@@ -299,11 +299,6 @@ function bind() {
     if (mode !== 'game') return;
     if (e.code === 'Escape' || e.code === 'KeyP') setPaused(!paused);
     else if (e.code === 'KeyM') audio.setMuted(!audio.muted);
-    else if (e.code === 'F2') {
-      e.preventDefault();
-      game.sharp = !game.sharp;
-      resize();
-    }
   });
   // Esc при захваченном курсоре до страницы не доходит: браузер просто снимает захват
   document.addEventListener('pointerlockchange', () => {
