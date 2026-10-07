@@ -25,9 +25,39 @@ async function getText(url, timeoutMs) {
   }
 }
 
-// Starlink всегда берётся из снимка в public/data (11 тысяч объектов, CelesTrak
-// просит не тянуть их чаще раза в два часа). «Рассветов» три десятка, их
-// пробуем обновить вживую и молча остаёмся на снимке, если не вышло.
+// CelesTrak обновляет элементы раз в два часа, на повторные запросы отвечает 403,
+// а настойчивых блокирует по адресу. Поэтому ответ (или сам факт отказа)
+// запоминается в браузере, и следующий запрос уходит не раньше чем через два часа.
+const LIVE_TTL = 2 * 60 * 60 * 1000;
+const LIVE_KEY = 'dv-rassvet';
+
+async function liveRassvet() {
+  let cached = null;
+  try {
+    cached = JSON.parse(localStorage.getItem(LIVE_KEY));
+  } catch {
+    // хранилище недоступно — спросим CelesTrak напрямую
+  }
+  if (cached && Date.now() - cached.at < LIVE_TTL) return cached.csv;
+
+  let csv = null;
+  try {
+    const text = await getText(`${CELESTRAK}?NAME=RASSVET&FORMAT=csv`, 2500);
+    if (text.startsWith('OBJECT_NAME')) csv = text;
+  } catch {
+    // офлайн или лимит CelesTrak
+  }
+  try {
+    localStorage.setItem(LIVE_KEY, JSON.stringify({ at: Date.now(), csv }));
+  } catch {
+    // без хранилища просто спросим ещё раз при следующей загрузке
+  }
+  return csv;
+}
+
+// Starlink всегда берётся из снимка в public/data (11 тысяч объектов).
+// «Рассветов» три десятка, их пробуем обновить вживую и молча остаёмся
+// на снимке, если не вышло.
 export async function loadCatalog() {
   const base = `${import.meta.env.BASE_URL}data/`;
   const [starlinkCsv, rassvetSnapshot, meta] = await Promise.all([
@@ -36,17 +66,9 @@ export async function loadCatalog() {
     getText(`${base}meta.json`, 30000).then(JSON.parse).catch(() => ({})),
   ]);
 
-  let rassvetCsv = rassvetSnapshot;
-  let live = false;
-  try {
-    const text = await getText(`${CELESTRAK}?NAME=RASSVET&FORMAT=csv`, 2500);
-    if (text.startsWith('OBJECT_NAME')) {
-      rassvetCsv = text;
-      live = true;
-    }
-  } catch {
-    // офлайн или лимит CelesTrak
-  }
+  const liveCsv = await liveRassvet();
+  const rassvetCsv = liveCsv ?? rassvetSnapshot;
+  const live = Boolean(liveCsv);
 
   const catalog = {
     starlink: new SatSet(parseCsv(starlinkCsv)),
