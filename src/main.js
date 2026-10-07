@@ -8,6 +8,7 @@ import { Sfx } from './audio.js';
 import { SHIPS } from './models.js';
 import { MISSIONS } from './missions.js';
 import { formatLatLon } from './orbits.js';
+import { GOALS, reachGoal } from './analytics.js';
 
 const $ = (id) => document.getElementById(id);
 const num = (n) => n.toLocaleString('ru-RU');
@@ -128,6 +129,7 @@ function launch() {
   input.enabled = true;
   game.start();
   lockPointer();
+  reachGoal(GOALS.start, { mission: missionId, ship: shipId });
 }
 
 function setPaused(value) {
@@ -147,6 +149,7 @@ function setPaused(value) {
 function showResult(res) {
   input.enabled = false;
   if (document.pointerLockElement) document.exitPointerLock();
+  reachGoal(res.won ? GOALS.win : GOALS.lose, { mission: missionId, ship: shipId, outcome: res.title });
   // Рекорд у каждой миссии свой; у первой ключ остался прежним
   const bestKey = missionId === 'intercept' ? 'dv-best' : `dv-best-${missionId}`;
   let best = 0;
