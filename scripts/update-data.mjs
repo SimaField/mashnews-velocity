@@ -15,7 +15,7 @@ for (const [file, name] of Object.entries(SETS)) {
   const target = new URL(`${file}.csv`, OUT);
   try {
     const res = await fetch(`${API}?NAME=${name}&FORMAT=csv`, {
-      headers: { 'User-Agent': 'DawnVelocity/0.1 (catalog snapshot)' },
+      headers: { 'User-Agent': 'MashnewsVelocity/0.1 (catalog snapshot)' },
     });
     const text = await res.text();
     if (!res.ok || !text.startsWith('OBJECT_NAME')) {
