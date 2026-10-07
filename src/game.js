@@ -258,7 +258,8 @@ export class Game {
   resize(w, h) {
     this.w = w;
     this.h = h;
-    this.pixelScale = this.sharp ? 1 : Math.max(2, Math.round(h / 400));
+    // На телефоне экран и так невысокий: буфер в полный размер уже даёт крупный пиксель
+    this.pixelScale = this.sharp || h < 540 ? 1 : Math.max(2, Math.round(h / 400));
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(1);
@@ -305,6 +306,9 @@ export class Game {
     if (inp.down('ArrowRight') || inp.down('KeyD')) yawIn -= 1;
     if (inp.down('ArrowUp') || inp.down('KeyW')) pitchIn += 1;
     if (inp.down('ArrowDown') || inp.down('KeyS')) pitchIn -= 1;
+    // Экранный джойстик: вправо — поворот вправо, вверх — нос вверх
+    yawIn = clamp(yawIn - inp.stick.x, -1, 1);
+    pitchIn = clamp(pitchIn - inp.stick.y, -1, 1);
     const ease = Math.min(1, dt * 8);
     p.yawRate += (yawIn * ship.turn - p.yawRate) * ease;
     p.pitchRate += (pitchIn * ship.turn * 0.85 - p.pitchRate) * ease;

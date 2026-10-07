@@ -12,6 +12,8 @@ export class Input {
     this.keysHit = new Set();
     this.buttons = new Set();
     this.buttonsHit = new Set();
+    this.virtual = new Set(); // клавиши, «зажатые» экранными кнопками
+    this.stick = { x: 0, y: 0 }; // экранный джойстик, −1…1; y растёт вниз
     this.dx = 0;
     this.dy = 0;
 
@@ -44,11 +46,24 @@ export class Input {
     this.keysHit.clear();
     this.buttons.clear();
     this.buttonsHit.clear();
+    this.virtual.clear();
+    this.stick.x = this.stick.y = 0;
     this.dx = this.dy = 0;
   }
 
+  // Экранная кнопка зажата или отпущена
+  hold(code, on) {
+    if (on) this.virtual.add(code);
+    else this.virtual.delete(code);
+  }
+
+  // Разовое нажатие экранной кнопки
+  tap(code) {
+    this.keysHit.add(code);
+  }
+
   down(code) {
-    return this.keys.has(code);
+    return this.keys.has(code) || this.virtual.has(code);
   }
 
   // Нажатие в этом кадре (сбрасывается в endFrame)
