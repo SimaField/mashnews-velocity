@@ -207,6 +207,13 @@ function bind() {
     resyncNow();
     setSpeed(1);
   });
+  // Вращение глобуса выключено при каждой загрузке, даже если браузер помнит галочку
+  $('t-spin').checked = false;
+  $('t-spin').addEventListener('change', (e) => {
+    audio.unlock();
+    audio.click();
+    menu.setSpin(e.target.checked);
+  });
   $('speeds').addEventListener('click', (e) => {
     if (e.target.dataset.speed) setSpeed(Number(e.target.dataset.speed));
   });

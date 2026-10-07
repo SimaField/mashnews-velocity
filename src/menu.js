@@ -69,8 +69,8 @@ export class Menu {
     this.controls.enableDamping = true;
     this.controls.minDistance = 9500;
     this.controls.maxDistance = 70000;
-    this.controls.autoRotate = true;
     this.controls.autoRotateSpeed = 0.3;
+    this.setSpin(false);
     // Начальный вид: над Россией
     latLonToVec3(38, 75, 34000, this.camera.position).applyAxisAngle(THREE.Object3D.DEFAULT_UP, gmstAt(catalog.epoch));
 
@@ -106,6 +106,14 @@ export class Menu {
     this.rings.geometry.dispose();
     this.rings.geometry = new THREE.BufferGeometry();
     this.rings.geometry.setAttribute('position', new THREE.BufferAttribute(pts.subarray(0, k), 3));
+  }
+
+  // Вращение глобуса на экране. Выключено — камера идёт вместе с Землёй, материки
+  // стоят на месте, движутся только спутники. Включено — камера остаётся
+  // в инерциальных осях и медленно облетает Землю, как было раньше.
+  setSpin(on) {
+    this.spin = on;
+    this.controls.autoRotate = on;
   }
 
   // Каталог заново привязали к реальному времени
@@ -163,8 +171,14 @@ export class Menu {
     rassvet.update(this.simT);
     this.slAttr.needsUpdate = true;
     this.rsAttr.needsUpdate = true;
-    this.gmst = gmstAt(epoch) + EARTH_RATE * this.simT;
-    this.globe.group.rotation.y = this.gmst;
+    const gmst = gmstAt(epoch) + EARTH_RATE * this.simT;
+    // Поворот считается от прошлого кадра, поэтому камера не отстаёт от Земли
+    // и при смене скорости времени, и при повторной привязке каталога
+    if (!this.spin && this.gmst !== undefined) {
+      this.camera.position.applyAxisAngle(THREE.Object3D.DEFAULT_UP, gmst - this.gmst);
+    }
+    this.gmst = gmst;
+    this.globe.group.rotation.y = gmst;
     this.controls.update();
     if (this.preview) this.preview.rotation.y += dt * 0.5;
   }
