@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 // Общее для боя, миссий и приборов. Расстояния в километрах, скорости в км/с.
 export const TIME_SCALE = 3; // во сколько раз орбитальное движение быстрее реального
+export const BULLET_SPEED = 3000, BULLET_LIFE = 0.34;
 export const BOLT_SPEED = 1100, BOLT_LIFE = 1.4;
 export const MAX_SHOTS = 96;
 export const COMM_RANGE = 2200;

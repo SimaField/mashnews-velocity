@@ -138,7 +138,7 @@ function toBriefing() {
   $('brief-title').textContent = meta.name;
   $('brief-text').textContent = brief.text;
   $('brief-hint').textContent = brief.hint;
-  $('brief-facts').innerHTML = factRows([['Аппарат', SHIPS[shipId].name, 'gold'], ...brief.facts]);
+  $('brief-facts').innerHTML = factRows([[meta.ship ? 'Станция' : 'Аппарат', game.ship.name, 'gold'], ...brief.facts]);
   for (const b of $('missions').children) b.classList.toggle('on', b.dataset.mission === missionId);
   menu.setPreview(null);
   show('briefing');
@@ -165,6 +165,7 @@ function launch() {
   input.reset();
   input.enabled = true;
   game.start();
+  touch.setBoostLabel(game.ship.station ? 'ДРОН' : 'ФОРСАЖ');
   if (touchMode) enterFullscreen();
   else lockPointer();
   updateTouchUi();
@@ -263,7 +264,7 @@ function bind() {
     menu.setSpin(e.target.checked);
   });
   // Выбор миссии на экране брифинга: бой пересоздаётся под выбранный сценарий
-  $('missions').innerHTML = Object.values(MISSIONS).map((m) => `<button data-mission="${m.id}"><b>${m.number}</b>${m.name}</button>`).join('');
+  $('missions').innerHTML = Object.values(MISSIONS).map((m) => `<button data-mission="${m.id}"><b>${m.number}</b> ${m.name}</button>`).join('');
   if (!catalog.iss) {
     const defend = $('missions').querySelector('[data-mission="defend"]');
     defend.disabled = true;
@@ -282,7 +283,7 @@ function bind() {
     if (e.target.dataset.speed) setSpeed(Number(e.target.dataset.speed));
   });
 
-  $('ships').innerHTML = Object.values(SHIPS).map((s) => `
+  $('ships').innerHTML = Object.values(SHIPS).filter((s) => !s.hidden).map((s) => `
     <button class="ship${s.locked ? ' locked' : ''}" data-ship="${s.id}">
       <b>${s.name}</b><span>${s.sub}</span>${s.locked ? '<em>в разработке</em>' : ''}
     </button>`).join('');

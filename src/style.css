@@ -234,9 +234,9 @@ h2 {
 }
 .seg button.on { color: #04121c; background: var(--cyan); }
 .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
-.seg.missions { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
-.seg.missions button { display: grid; gap: 2px; padding: 8px 6px; font: 600 11px/1.2 var(--sans); }
-.seg.missions button b { font: 700 13px var(--mono); }
+.seg.missions { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+.seg.missions button { padding: 9px 8px; font: 600 12px/1.2 var(--sans); }
+.seg.missions button b { font: 700 12px var(--mono); }
 
 .fine {
   position: absolute;

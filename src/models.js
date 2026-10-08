@@ -165,6 +165,57 @@ const PARTS = {
     part(cyl(7, 8, 26, 6), '#f6f3ee', { p: [-31, 4, 0], r: [0, 0, 1.0] }),
     part(cyl(22, 26, 14, 8), '#3a6fe0', { p: [0, -31, 0] }),
   ],
+  // Станция «Мир»: базовый блок вдоль курса, впереди узел с четырьмя модулями крестом
+  mir: () => [
+    part(cyl(2.1, 2.1, 13, 8), WHITE, { r: NOSE, p: [0, 0, 4] }),
+    part(cyl(1.6, 2.1, 5.5, 8), '#cfd6de', { r: NOSE, p: [0, 0, 13] }),
+    part(ball(2.5), '#cfd6de', { p: [0, 0, -4.5] }),
+    part(cyl(2, 2, 12, 8), WHITE, { r: [0, 0, Math.PI / 2], p: [8.5, 0, -4.5] }),
+    part(cyl(2, 2, 12, 8), WHITE, { r: [0, 0, Math.PI / 2], p: [-8.5, 0, -4.5] }),
+    part(cyl(2, 2, 12, 8), '#cfd6de', { p: [0, 8.5, -4.5] }),
+    part(cyl(2, 2, 12, 8), '#cfd6de', { p: [0, -8.5, -4.5] }),
+    part(cyl(1.3, 1.3, 6, 8), GREY, { r: NOSE, p: [0, 0, -9.5] }),
+    part(cyl(1.3, 1.3, 6, 8), GREY, { r: NOSE, p: [0, 0, 18.5] }),
+    part(box(15, 0.15, 4.2), PANEL, { p: [9.6, 0, 4] }),
+    part(box(15, 0.15, 4.2), PANEL, { p: [-9.6, 0, 4] }),
+    part(box(0.15, 11, 3.6), PANEL, { p: [0, 7.6, 7] }),
+    part(box(3.4, 0.15, 11), PANEL, { p: [12.5, 0, -11.5] }),
+    part(box(3.4, 0.15, 11), PANEL, { p: [-12.5, 0, 2.5] }),
+    part(box(0.15, 3.4, 11), PANEL, { p: [0, 12.5, -11.5] }),
+    part(box(0.15, 3.4, 11), PANEL, { p: [0, -12.5, 2.5] }),
+  ],
+  // Спаренные пулемёты на поворотном основании: стволы смотрят в −Z
+  mirGun: () => [
+    part(cyl(1.6, 2, 1.6, 8), '#5a6472'),
+    part(box(2.4, 1.6, 3), GREY, { p: [0, 1.6, 0] }),
+    part(cyl(0.28, 0.28, 6, 6), DARK, { r: NOSE, p: [0.7, 1.7, -4] }),
+    part(cyl(0.28, 0.28, 6, 6), DARK, { r: NOSE, p: [-0.7, 1.7, -4] }),
+  ],
+  saucer: () => [
+    part(cyl(9, 9, 1.4, 10), GREY),
+    part(cyl(4, 7, 1.6, 10), '#aab4c2', { p: [0, 1.4, 0] }),
+    part(ball(3.6), '#6dffa0', { p: [0, 2.6, 0], s: [1, 0.7, 1] }),
+    part(cyl(6, 3, 1.2, 10), '#5a6472', { p: [0, -1.2, 0] }),
+  ],
+  // Чайник Рассела: носик вперёд, ручка сзади
+  teapot: () => [
+    part(new THREE.SphereGeometry(5.5, 8, 6), WHITE, { s: [1, 0.85, 1] }),
+    part(cyl(1, 1.6, 6, 6), WHITE, { p: [0, 1.2, -7], r: [-1, 0, 0] }),
+    part(box(0.9, 5.5, 0.9), WHITE, { p: [0, 0.3, 8] }),
+    part(box(0.9, 0.9, 3), WHITE, { p: [0, 2.6, 6.6] }),
+    part(box(0.9, 0.9, 3), WHITE, { p: [0, -2, 6.6] }),
+    part(cyl(2.6, 3.2, 0.8, 8), '#3a6fe0', { p: [0, 4.6, 0] }),
+    part(ball(0.9), '#3a6fe0', { p: [0, 5.6, 0] }),
+  ],
+  roadster: () => [
+    part(box(4.6, 1.5, 10.5), '#b3122b'),
+    part(box(4, 1.3, 4.2), GLASS, { p: [0, 1.3, 0.6] }),
+    part(cyl(1.1, 1.1, 0.9, 8), DARK, { r: [0, 0, Math.PI / 2], p: [2.4, -0.7, -3.3] }),
+    part(cyl(1.1, 1.1, 0.9, 8), DARK, { r: [0, 0, Math.PI / 2], p: [-2.4, -0.7, -3.3] }),
+    part(cyl(1.1, 1.1, 0.9, 8), DARK, { r: [0, 0, Math.PI / 2], p: [2.4, -0.7, 3.3] }),
+    part(cyl(1.1, 1.1, 0.9, 8), DARK, { r: [0, 0, Math.PI / 2], p: [-2.4, -0.7, 3.3] }),
+    part(ball(0.8), WHITE, { p: [-1, 2.3, 0.4] }),
+  ],
   missile: () => [
     part(new THREE.ConeGeometry(0.45, 3, 5), WHITE, { r: NOSE }),
     part(box(1.4, 0.06, 0.6), GREY, { p: [0, 0, 1.2] }),
@@ -175,6 +226,7 @@ const PARTS = {
 const EDGE = {
   spiral: '#ffb23e', buran: '#ffb23e', is: '#ffb23e', zeus: '#ffb23e',
   starlink: '#3d7fd9', rassvet: '#ffb23e', guard: '#ff4d5e', missile: '#ffd9a0',
+  mir: '#ffb23e', mirGun: '#ffb23e', saucer: '#6dffa0', teapot: '#9fd8ff', roadster: '#ff9a9a',
   clown: '#ff7ad9', clownEye: '#5ef2ff', clownNose: '#ffd27a', clownHand: '#ff7ad9',
   iss: '#ffb23e', starship: '#ff4d5e', starshipEngine: '#ff9a3c', starshipBay: '#ffd27a', starshipDoor: '#ff4d5e',
 };
@@ -221,6 +273,17 @@ export const SHIPS = {
     desc: 'Одноразовый перехватчик с осколочной боевой частью. Появится в следующих версиях.',
     cruise: 260, boost: 480, turn: 1.3, shield: 50, hull: 60, fuel: 80, burn: 16, missiles: 4,
     engines: [[0, 0, 2.2]],
+  },
+  // Станция: не летает, игрок только наводит оружие. В ангаре не показывается, её выдаёт миссия.
+  // station — режим управления; radius — размер для попаданий и таранов; recharge — заряд дронов в секунду
+  mir: {
+    id: 'mir', name: 'Мир', sub: 'Орбитальная станция', hidden: true, station: true,
+    desc: 'Спаренные пулемёты, ракеты, две автоматические турели и дроны-перехватчики.',
+    cruise: 0, boost: 0, turn: 1.7, shield: 200, hull: 300, fuel: 120, burn: 0, recharge: 2.5, missiles: 24,
+    engines: [], scale: 1.6, radius: 36, fireRate: 14,
+    muzzle: { side: 1.6, ahead: 20, up: 16 },
+    camera: { back: 190, up: 70, ahead: 500, drop: 30, eyeAhead: 30, eyeUp: 20 },
+    gun: 'СПАРЕННЫЕ ПУЛЕМЁТЫ', fuelLabel: 'ЗАРЯД', lostText: 'Станция «Мир» разрушена', lostBanner: 'СТАНЦИЯ ПОТЕРЯНА',
   },
   zeus: {
     id: 'zeus', name: 'Зевс', sub: 'Ядерный буксир', locked: true,
