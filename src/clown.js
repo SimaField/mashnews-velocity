@@ -13,11 +13,13 @@ import { TIME_SCALE, SCORE, COLORS, clamp, orient, turnToward } from './common.j
 const HEAD_R = 110; // радиус головы, км
 const ORBIT_LIFT = 160; // насколько клоун выше «Рассвета», рядом с которым объявился
 const ORBIT_LEAD = 950; // и насколько впереди него по орбите
-const THROW_SPEED = 430, THROW_LIFE = 8, THROW_HIT = 16, THROW_DAMAGE = 18, THROW_RANGE = 2600;
+const THROW_SPEED = 650, THROW_LIFE = 6, THROW_HIT = 16, THROW_DAMAGE = 18, THROW_RANGE = 2600;
+const THROW_HP = 8; // попаданий пушки, чтобы сбить брошенный спутник
 const CONFETTI_RANGE = 2000, JAM_TIME = 5;
 const RAGE_TIME = 5, RAGE_FACTOR = 2.5; // сколько секунд длится ярость и во сколько раз чаще броски
 const JUGGLE_RATE = 0.42; // кругов жонглирования в секунду
-const HAND_X = 165, HAND_Y = -70, HAND_Z = -60; // место руки в осях головы: сбоку, чуть ниже и впереди лица
+const HAND_X = 215, HAND_Y = -70, HAND_Z = -60; // место руки в осях головы: сбоку, чуть ниже и впереди лица
+const ARC_HIGH = 430, ARC_LOW = 120; // высота верхней дуги жонглирования и глубина нижней, км
 const PINK = '#ff7ad9';
 const CONFETTI = [[1, 0.3, 0.5], [1, 0.85, 0.2], [0.3, 0.9, 1], [0.5, 1, 0.5], [0.8, 0.5, 1]];
 
@@ -74,7 +76,7 @@ export class Clown extends Mission {
       mesh.scale.setScalar(3); // крупнее настоящих: летящий в лицо спутник должен быть виден издалека
       mesh.visible = false;
       scene.add(mesh);
-      thrown.push({ kind: 'thrown', owner: 'БРОСОК', label: '', r: THROW_HIT + 8, hp: 2, max: 2, alive: false, open: true, pos: new THREE.Vector3(), vel: new THREE.Vector3(), mesh, life: 0 });
+      thrown.push({ kind: 'thrown', owner: 'БРОСОК', label: '', r: THROW_HIT + 8, hp: THROW_HP, max: THROW_HP, alive: false, open: true, pos: new THREE.Vector3(), vel: new THREE.Vector3(), mesh, life: 0 });
     }
     // Руки в перчатках, без плеч: висят по бокам от лица и перебрасывают спутники
     const hands = [-1, 1].map((side) => {
@@ -183,7 +185,7 @@ export class Clown extends Mission {
       // 70% круга спутник летит верхом из правой руки в левую, остальное время — низом обратно
       const high = ph < 0.7, u = high ? ph / 0.7 : (ph - 0.7) / 0.3;
       const x = (high ? 1 - 2 * u : 2 * u - 1) * HAND_X;
-      const y = HAND_Y + 34 + (high ? 250 : -55) * 4 * u * (1 - u);
+      const y = HAND_Y + 34 + (high ? ARC_HIGH : -ARC_LOW) * 4 * u * (1 - u);
       mesh.visible = !c.popped;
       mesh.position.set(x, y, HAND_Z).applyMatrix4(c.group.matrixWorld);
       mesh.rotation.set(ph * 9, ph * 14, 0);
