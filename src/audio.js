@@ -120,6 +120,23 @@ export class Sfx {
     this.tone('square', 900, 600, 0.05, 0.07);
   }
 
+  // Клаксон клоуна
+  honk() {
+    this.tone('square', 311, 311, 0.11, 0.1);
+    this.tone('square', 392, 392, 0.3, 0.1, 0.13);
+    this.tone('sawtooth', 196, 196, 0.3, 0.06, 0.13);
+  }
+
+  boing() {
+    this.tone('sine', 190, 560, 0.16, 0.14);
+  }
+
+  // Сдувающийся шарик
+  deflate() {
+    this.tone('sawtooth', 900, 90, 2.6, 0.09);
+    this.noise(5200, 300, 2.6, 0.14);
+  }
+
   fanfare(win) {
     const notes = win ? [392, 523, 659, 784] : [330, 262, 196, 147];
     notes.forEach((f, i) => this.tone('square', f, f, 0.22, 0.1, i * 0.16));

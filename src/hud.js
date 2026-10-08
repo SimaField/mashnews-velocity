@@ -4,6 +4,7 @@ import { COLORS, COMM_RANGE } from './common.js';
 
 const FONT = '"Cascadia Mono", Consolas, "Courier New", monospace';
 const RADAR_RANGE = 1500;
+const CONFETTI = ['#ff4d80', '#ffd933', '#4de6ff', '#80ff80', '#cc80ff'];
 const _v = new THREE.Vector3(), _p = new THREE.Vector3(), _d = new THREE.Vector3(), _c = new THREE.Vector3();
 const _up = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3();
 const _s = { x: 0, y: 0, cx: 0, cy: 0, front: false, on: false };
@@ -176,6 +177,7 @@ export class Hud {
     this.drawRadar(game);
     this.drawStatus(game);
     game.mission.drawBars(this);
+    if (game.radarJam > 0) this.drawConfetti(game);
 
     if (game.damageFlash > 0) {
       const grad = g.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.75);
@@ -259,7 +261,7 @@ export class Hud {
           this.text(game.mission.guardName, tx, y - 6, color, 12);
           this.text(`${Math.round(dist)} км · БРОНЯ ${lock.guard.hp}/4`, tx, y + 10, color, 11);
         } else if (lock.part) {
-          this.text(`STARSHIP · ${lock.part.label}`, tx, y - 6, color, 12);
+          this.text(`${lock.part.owner} · ${lock.part.label}`, tx, y - 6, color, 12);
           this.text(`${Math.round(dist)} км · ПРОЧНОСТЬ ${lock.part.hp}/${lock.part.max}`, tx, y + 10, color, 11);
         } else {
           const i = lock.sat;
@@ -327,6 +329,22 @@ export class Hud {
     this.text(`${Math.round(p.alt)} км`, x + 172, y - 7, p.alt < 260 ? COLORS.red : COLORS.cyan, 11, 'right');
   }
 
+  // Конфетти сыплется по экрану, пока радар забит; к концу помех редеет
+  drawConfetti(game) {
+    const g = this.g, w = this.w, h = this.h;
+    g.globalAlpha = Math.min(1, game.radarJam / 1.5) * 0.85;
+    for (let n = 0; n < 40; n++) {
+      // Положение каждого кусочка задано его номером, время только двигает его вниз
+      const seed = Math.sin(n * 127.1) * 43758.5453;
+      const fx = seed - Math.floor(seed), fy = (n * 0.618) % 1;
+      const x = (fx * w + Math.sin(game.clock * 2 + n) * 18 + w) % w;
+      const y = ((fy + game.clock * (0.16 + (n % 5) * 0.04)) % 1) * h;
+      g.fillStyle = CONFETTI[n % CONFETTI.length];
+      g.fillRect(x, y, 5 + (n % 3) * 2, 4 + (n % 2) * 3);
+    }
+    g.globalAlpha = 1;
+  }
+
   drawRadar(game) {
     const g = this.g, { sl, rs, player: p } = game, compact = this.compact;
     const R = compact ? 40 : 62, k = R / RADAR_RANGE;
@@ -346,6 +364,17 @@ export class Hud {
     g.moveTo(cx, cy - R);
     g.lineTo(cx, cy + R);
     g.stroke();
+
+    // Радар забит: вместо отметок цветной шум
+    if (game.radarJam > 0) {
+      for (let n = 0; n < 48; n++) {
+        const rr = Math.sqrt(Math.random()) * (R - 3), an = Math.random() * Math.PI * 2;
+        g.fillStyle = CONFETTI[n % CONFETTI.length];
+        g.fillRect(cx + Math.cos(an) * rr - 1.5, cy + Math.sin(an) * rr - 1.5, 3, 3);
+      }
+      this.text('ПОМЕХИ', cx, cy + 4, COLORS.red, compact ? 9 : 11, 'center', 700);
+      return;
+    }
 
     // Плоскость радара — местный горизонт, курс вверх
     _up.copy(p.pos).normalize();

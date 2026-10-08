@@ -234,8 +234,9 @@ h2 {
 }
 .seg button.on { color: #04121c; background: var(--cyan); }
 .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
-.seg.missions { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
-.seg.missions button { padding: 11px 10px; font-size: 13px; }
+.seg.missions { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
+.seg.missions button { display: grid; gap: 2px; padding: 8px 6px; font: 600 11px/1.2 var(--sans); }
+.seg.missions button b { font: 700 13px var(--mono); }
 
 .fine {
   position: absolute;
@@ -492,7 +493,7 @@ body:not(.touch) .for-touch, body.touch .for-keys { display: none; }
   .bars { gap: 5px 12px; }
   .facts { gap: 4px 14px; font-size: 12px; }
   .seg.missions { margin-bottom: 8px; }
-  .seg.missions button { padding: 8px 10px; }
+  .seg.missions button { padding: 6px; }
   .dialog { padding: 16px 20px; }
   .dialog .menu { margin-top: 12px; }
   .keys { gap: 5px 16px; font-size: 13px; }

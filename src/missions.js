@@ -1,62 +1,16 @@
 import * as THREE from 'three';
 import { R_EARTH, EARTH_RATE, gmstAt, subPoint, formatLatLon } from './orbits.js';
 import { instance } from './models.js';
+import { Mission, firstHit } from './mission.js';
+import { Clown } from './clown.js';
 import {
   TIME_SCALE, BOLT_SPEED, BOLT_LIFE, MAX_SHOTS, SCORE, COLORS,
-  clamp, orient, turnToward, segDist2, segSphereT,
+  clamp, orient, turnToward, segDist2,
 } from './common.js';
 
-// Миссия управляет сценарием боя: что считается целью, откуда берутся
-// противники, когда бой выигран или проигран и что показывать на приборах.
-// Общие системы (полёт, оружие, перехватчики, эффекты) живут в Game.
+// Сценарии первых двух миссий. Базовый класс и общие помощники — в mission.js.
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
-
-class Mission {
-  constructor(game) {
-    this.game = game;
-    this.maxGuards = 3; // сколько перехватчиков может быть в бою одновременно
-    this.guardName = 'ПЕРЕХВАТЧИК';
-    this.winText = 'ЗАДАЧА ВЫПОЛНЕНА';
-    this.winTitle = 'Задача выполнена';
-  }
-
-  update() {}
-
-  // Сбит аппарат Starlink, не отмеченный как цель
-  onSatKilled(i, pos) {
-    const g = this.game;
-    g.score += SCORE.starlink;
-    g.say(`СБИТ ${g.sl.names[i]}  +${SCORE.starlink}`, '#8fb4e8');
-    if (Math.random() < 0.15) g.dropPickup(pos);
-  }
-
-  onGuardKilled() {}
-
-  // Попадание снаряда игрока: 0 — мимо, 1 — урон, 2 — снаряд поглощён без урона
-  bulletHit() {
-    return 0;
-  }
-
-  // Попадание выстрела противника во что-то кроме игрока
-  boltHit() {
-    return false;
-  }
-
-  lockCandidates() {}
-
-  damagePart() {}
-
-  updateComm() {}
-
-  drawMarkers() {}
-
-  drawBars() {}
-
-  radar() {}
-
-  dispose() {}
-}
 
 // ---------- Миссия 01: перехват орбитальной плоскости Starlink ----------
 
@@ -272,7 +226,7 @@ class Defend extends Mission {
       const mesh = instance(model);
       mesh.position.set(x, y, z);
       group.add(mesh);
-      return { kind, label, local: new THREE.Vector3(x, y, z), r: r * BOSS_SCALE, hp, max: hp, alive: true, open: kind === 'engine', pos: new THREE.Vector3(), vel, mesh };
+      return { kind, owner: 'STARSHIP', label, local: new THREE.Vector3(x, y, z), r: r * BOSS_SCALE, hp, max: hp, alive: true, open: kind === 'engine', pos: new THREE.Vector3(), vel, mesh };
     };
     const parts = [
       part('engine', 'ДВИГАТЕЛЬ 1', 0, 2.2, 26.5, 5, 12, 'starshipEngine'),
@@ -569,26 +523,10 @@ class Defend extends Mission {
       return 2;
     }
     if (!boss.active || boss.dying > 0) return 0;
-    // Первая сфера на пути снаряда: уязвимый узел или броня корпуса
-    let best = Infinity, hit = null;
-    for (const part of boss.parts) {
-      if (!part.alive) continue;
-      const t = segSphereT(bul.pos, step, part.pos, part.r);
-      if (t < best) {
-        best = t;
-        hit = part;
-      }
-    }
-    for (const c of boss.hull) {
-      const t = segSphereT(bul.pos, step, c, HULL_R * BOSS_SCALE);
-      if (t < best) {
-        best = t;
-        hit = null;
-      }
-    }
-    if (best === Infinity) return 0;
-    if (hit && this.damagePart(hit, 1)) return 1;
-    g.spark(_c.copy(bul.pos).addScaledVector(step, best), 70, 0.25, 0.7, 0.75, 0.85, 3);
+    const hit = firstHit(bul.pos, step, boss.parts, boss.hull, HULL_R * BOSS_SCALE);
+    if (hit.t === Infinity) return 0;
+    if (hit.part && this.damagePart(hit.part, 1)) return 1;
+    g.spark(_c.copy(bul.pos).addScaledVector(step, hit.t), 70, 0.25, 0.7, 0.75, 0.85, 3);
     return 2;
   }
 
@@ -707,4 +645,5 @@ class Defend extends Mission {
 export const MISSIONS = {
   intercept: { id: 'intercept', number: '01', name: 'Перехват', create: (game) => new Intercept(game) },
   defend: { id: 'defend', number: '02', name: 'Защита МКС', create: (game) => new Defend(game) },
+  clown: { id: 'clown', number: '03', name: 'Цирк на орбите', create: (game) => new Clown(game) },
 };

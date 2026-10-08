@@ -62,6 +62,7 @@ export class Game {
     this.warning = '';
     this.damageFlash = 0;
     this.shake = 0;
+    this.radarJam = 0; // сколько секунд радар ещё забит помехами
     this.cockpit = false;
 
     this.scene = new THREE.Scene();
@@ -756,6 +757,16 @@ export class Game {
 
   // ---------- эффекты и бонусы ----------
 
+  // Одна частица с заданной скоростью (у spark разлёт случайный)
+  emit(pos, vel, life, r, g, b) {
+    const i = this.pNext;
+    this.pNext = (this.pNext + 1) % MAX_PARTICLES;
+    this.pPos.set([pos.x, pos.y, pos.z], i * 3);
+    this.pVel.set([vel.x, vel.y, vel.z], i * 3);
+    this.pCol.set([r, g, b], i * 3);
+    this.pLife[i] = life;
+  }
+
   spark(pos, speed, life, r, g, b, count = 1) {
     for (let k = 0; k < count; k++) {
       const i = this.pNext;
@@ -878,6 +889,7 @@ export class Game {
     while (this.messages.length && this.messages[0].t > 5) this.messages.shift();
     this.damageFlash = Math.max(0, this.damageFlash - dt * 2.2);
     this.shake = Math.max(0, this.shake - dt * 2.5);
+    this.radarJam = Math.max(0, this.radarJam - dt);
   }
 
   // ---------- ближние аппараты ----------
