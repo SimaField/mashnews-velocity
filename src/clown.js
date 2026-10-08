@@ -7,13 +7,17 @@ import { TIME_SCALE, SCORE, COLORS, clamp, orient, turnToward } from './common.j
 // ---------- Миссия 03: гигантский космический клоун ----------
 // Вся миссия — бой с боссом. Голова клоуна бронирована, уязвимы два глаза,
 // а после них — нос. Клоун жонглирует спутниками и швыряет их в игрока,
-// время от времени плюётся конфетти, которое забивает радар.
+// время от времени плюётся конфетти, которое забивает радар. Потеряв глаз
+// или получив трещину в носу, он на несколько секунд впадает в ярость.
 
 const HEAD_R = 110; // радиус головы, км
 const ORBIT_LIFT = 160; // насколько клоун выше «Рассвета», рядом с которым объявился
 const ORBIT_LEAD = 950; // и насколько впереди него по орбите
 const THROW_SPEED = 430, THROW_LIFE = 8, THROW_HIT = 16, THROW_DAMAGE = 18, THROW_RANGE = 2600;
 const CONFETTI_RANGE = 2000, JAM_TIME = 5;
+const RAGE_TIME = 5, RAGE_FACTOR = 2.5; // сколько секунд длится ярость и во сколько раз чаще броски
+const JUGGLE_RATE = 0.42; // кругов жонглирования в секунду
+const HAND_X = 165, HAND_Y = -70, HAND_Z = -60; // место руки в осях головы: сбоку, чуть ниже и впереди лица
 const PINK = '#ff7ad9';
 const CONFETTI = [[1, 0.3, 0.5], [1, 0.85, 0.2], [0.3, 0.9, 1], [0.5, 1, 0.5], [0.8, 0.5, 1]];
 
@@ -65,27 +69,35 @@ export class Clown extends Mission {
 
     // Брошенные спутники: для захвата и попаданий это такие же «узлы», только летающие
     const thrown = [];
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < 10; k++) {
       const mesh = instance('starlink', COLORS.red);
-      mesh.scale.setScalar(1.4);
+      mesh.scale.setScalar(3); // крупнее настоящих: летящий в лицо спутник должен быть виден издалека
       mesh.visible = false;
       scene.add(mesh);
-      thrown.push({ kind: 'thrown', owner: 'БРОСОК', label: '', r: THROW_HIT, hp: 2, max: 2, alive: false, open: true, pos: new THREE.Vector3(), vel: new THREE.Vector3(), mesh, life: 0 });
+      thrown.push({ kind: 'thrown', owner: 'БРОСОК', label: '', r: THROW_HIT + 8, hp: 2, max: 2, alive: false, open: true, pos: new THREE.Vector3(), vel: new THREE.Vector3(), mesh, life: 0 });
     }
-    // Спутники, которыми клоун жонглирует над головой
+    // Руки в перчатках, без плеч: висят по бокам от лица и перебрасывают спутники
+    const hands = [-1, 1].map((side) => {
+      const mesh = instance('clownHand');
+      mesh.scale.set(side * 1.25, 1.25, 1.25);
+      group.add(mesh);
+      return { side, mesh, world: new THREE.Vector3() };
+    });
+    // Спутники, которыми клоун жонглирует
     const juggle = [];
     for (let k = 0; k < 4; k++) {
       const mesh = instance('starlink');
-      mesh.scale.setScalar(1.6);
+      mesh.scale.setScalar(4);
       scene.add(mesh);
       juggle.push(mesh);
     }
 
     this.clown = {
-      group, parts, thrown, juggle, vel, nose: parts[2],
+      group, parts, thrown, juggle, hands, vel, nose: parts[2],
       targets: [...parts, ...thrown],
       pos: new THREE.Vector3(), fwd: new THREE.Vector3(0, 0, -1), hand: new THREE.Vector3(), drift: new THREE.Vector3(),
       throwCd: 4, confettiCd: 9, bump: 0, dying: 0, popped: false, range: 0,
+      juggleT: 0, throwHand: 1, rage: 0, cracked: false,
     };
   }
 
@@ -154,23 +166,38 @@ export class Clown extends Mission {
     c.group.updateMatrixWorld(true);
     for (const part of c.parts) part.pos.copy(part.local).applyMatrix4(c.group.matrixWorld);
 
-    // Жонглирование: четыре спутника по кругу над головой
-    const right = _c.crossVectors(c.fwd, up).normalize();
-    c.hand.copy(c.pos).addScaledVector(up, HEAD_R + 95);
+    // Жонглирование: правая рука подбрасывает спутник высокой дугой над головой,
+    // левая ловит и возвращает его низом. В ярости всё идёт в два с половиной раза быстрее.
+    if (g.state === 'play') c.rage = Math.max(0, c.rage - dt);
+    const haste = c.rage > 0 ? RAGE_FACTOR : 1;
+    c.juggleT += dt * JUGGLE_RATE * haste;
+    for (const hand of c.hands) {
+      // Руки подбрасывают по очереди: каждая качается в свою половину такта
+      const beat = Math.sin((c.juggleT * c.juggle.length + (hand.side > 0 ? 0 : 0.5)) * Math.PI * 2);
+      hand.mesh.position.set(hand.side * HAND_X, HAND_Y + beat * 14, HAND_Z);
+      hand.mesh.rotation.z = -hand.side * (0.25 + beat * 0.12);
+      hand.world.copy(hand.mesh.position).applyMatrix4(c.group.matrixWorld);
+    }
     c.juggle.forEach((mesh, k) => {
-      const ang = g.clock * 2.6 + (k * Math.PI) / 2;
+      const ph = (c.juggleT + k / c.juggle.length) % 1;
+      // 70% круга спутник летит верхом из правой руки в левую, остальное время — низом обратно
+      const high = ph < 0.7, u = high ? ph / 0.7 : (ph - 0.7) / 0.3;
+      const x = (high ? 1 - 2 * u : 2 * u - 1) * HAND_X;
+      const y = HAND_Y + 34 + (high ? 250 : -55) * 4 * u * (1 - u);
       mesh.visible = !c.popped;
-      mesh.position.copy(c.hand).addScaledVector(right, Math.cos(ang) * 75).addScaledVector(up, Math.sin(ang) * 48);
-      mesh.rotation.set(ang * 1.7, ang, 0);
+      mesh.position.set(x, y, HAND_Z).applyMatrix4(c.group.matrixWorld);
+      mesh.rotation.set(ph * 9, ph * 14, 0);
     });
+    // Очередной бросок в игрока уйдёт из этой точки: чуть выше ладони
+    c.hand.copy(c.hands[c.throwHand].world).addScaledVector(up, 34);
 
     this.moveThrown(dt);
     if (g.state !== 'play') return;
 
-    // Бросок: только когда игрок рядом; без глаз клоун злится и бросает чаще
+    // Бросок: только когда игрок рядом. Без глаз клоун бросает чаще, в ярости — ещё чаще.
     c.throwCd -= dt;
     if (c.throwCd <= 0 && c.range < THROW_RANGE) {
-      c.throwCd = this.eyesAlive() ? 2.8 : 1.9;
+      c.throwCd = (this.eyesAlive() ? 2.8 : 1.9) / haste;
       this.throwSat(dir);
     }
 
@@ -209,6 +236,7 @@ export class Clown extends Mission {
     const lead = _d.copy(p.pos).addScaledVector(p.vel, c.range / THROW_SPEED).sub(c.hand).normalize();
     s.pos.copy(c.hand);
     s.vel.copy(lead).multiplyScalar(THROW_SPEED).add(c.vel);
+    c.throwHand = 1 - c.throwHand; // следующий бросок — другой рукой
     s.alive = true;
     s.hp = s.max;
     s.life = THROW_LIFE;
@@ -257,6 +285,13 @@ export class Clown extends Mission {
     if (part.hp > 0) {
       g.spark(part.pos, 130, 0.45, 1.0, 0.5, 0.75, 8);
       g.audio.spark();
+      // Сломанный нос — это конец боя, поэтому ярость за него приходит раньше: когда он треснул пополам
+      if (part.kind === 'nose' && !c.cracked && part.hp <= part.max / 2) {
+        c.cracked = true;
+        g.say('НОС ТРЕСНУЛ', COLORS.gold);
+        g.audio.honk();
+        this.enrage();
+      }
       return true;
     }
     part.hp = 0;
@@ -280,6 +315,7 @@ export class Clown extends Mission {
         g.say('ОБА ГЛАЗА ВЫБИТЫ', COLORS.gold);
         g.say('НОС ОТКРЫТ: БЕЙТЕ В КРАСНОЕ', COLORS.gold);
       }
+      this.enrage();
       return true;
     }
     // Нос лопнул: клоун сдувается и улетает
@@ -291,6 +327,14 @@ export class Clown extends Mission {
     g.audio.deflate();
     g.win();
     return true;
+  }
+
+  // Ярость: несколько секунд руки мелькают, а броски идут в два с половиной раза чаще
+  enrage() {
+    const g = this.game, c = this.clown;
+    c.rage = RAGE_TIME;
+    c.throwCd = Math.min(c.throwCd, 0.4);
+    g.say('КЛОУН В ЯРОСТИ: БРОСКИ ЧАЩЕ', COLORS.red);
   }
 
   // Сдувшийся шарик летит задом наперёд, вихляя и уменьшаясь
@@ -342,15 +386,18 @@ export class Clown extends Mission {
       max += part.max;
     }
     const frac = hp / max;
-    hud.text('КЛОУН', x - pad + 12, y + 10, PINK, 12);
-    g.strokeStyle = PINK;
+    // В ярости полоса мигает красным
+    const tone = c.rage > 0 && Math.floor(this.game.clock * 6) % 2 === 0 ? COLORS.red : PINK;
+    hud.text('КЛОУН', x - pad + 12, y + 10, tone, 12);
+    g.strokeStyle = tone;
     g.lineWidth = 1;
     g.globalAlpha = 0.5;
     g.strokeRect(x + 0.5, y + 0.5, bw, 10);
     g.globalAlpha = 1;
-    g.fillStyle = PINK;
+    g.fillStyle = tone;
     g.fillRect(x + 2, y + 2, (bw - 3) * frac, 7);
-    hud.text(`${Math.ceil(frac * 100)}%`, x + bw + 10, y + 10, PINK, 12);
+    hud.text(`${Math.ceil(frac * 100)}%`, x + bw + 10, y + 10, tone, 12);
+    if (c.rage > 0 && !small) hud.text(`ЯРОСТЬ ${Math.ceil(c.rage)}`, x + bw + 50, y + 36, COLORS.red, 10, 'right');
 
     // Узлы: два глаза и нос (контур — пока нос закрыт)
     c.parts.forEach((part, k) => {
