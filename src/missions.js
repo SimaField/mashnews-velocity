@@ -3,6 +3,7 @@ import { R_EARTH, EARTH_RATE, gmstAt, subPoint, formatLatLon } from './orbits.js
 import { instance } from './models.js';
 import { Mission, firstHit } from './mission.js';
 import { Clown } from './clown.js';
+import { MirDefense } from './mir.js';
 import {
   TIME_SCALE, BOLT_SPEED, BOLT_LIFE, MAX_SHOTS, SCORE, COLORS,
   clamp, orient, turnToward, segDist2,
@@ -646,4 +647,6 @@ export const MISSIONS = {
   intercept: { id: 'intercept', number: '01', name: 'Перехват', create: (game) => new Intercept(game) },
   defend: { id: 'defend', number: '02', name: 'Защита МКС', create: (game) => new Defend(game) },
   clown: { id: 'clown', number: '03', name: 'Цирк на орбите', create: (game) => new Clown(game) },
+  // ship — аппарат задан миссией, выбор в ангаре на неё не влияет
+  mir: { id: 'mir', number: '04', name: 'Станция «Мир»', ship: 'mir', create: (game) => new MirDefense(game) },
 };

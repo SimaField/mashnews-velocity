@@ -4,7 +4,7 @@ import { createRetroEarth, createSky } from './earth.js';
 import { SHIPS, instance, edgeMaterial } from './models.js';
 import { MISSIONS } from './missions.js';
 import {
-  TIME_SCALE, BOLT_SPEED, BOLT_LIFE, MAX_SHOTS, COMM_RANGE, SCORE, COLORS,
+  TIME_SCALE, BULLET_SPEED, BULLET_LIFE, BOLT_SPEED, BOLT_LIFE, MAX_SHOTS, COMM_RANGE, SCORE, COLORS,
   clamp, orient, turnToward, segDist2,
 } from './common.js';
 
@@ -12,7 +12,10 @@ import {
 // орбитах в настоящем масштабе; аркадные допущения — скорость игрока
 // (в десятки раз выше орбитальной) и размеры моделей.
 const LOD_RANGE = 1150, LOD_MESHES = 48, NEAR_MAX = 256;
-const BULLET_SPEED = 3000, BULLET_LIFE = 0.34, FIRE_RATE = 9, BULLET_HIT = 14;
+const FIRE_RATE = 9, BULLET_HIT = 14;
+// Откуда вылетают снаряды и где висит камера, в осях корабля. У станции свои значения в SHIPS.
+const MUZZLE = { side: 1.3, ahead: 3, up: 0 };
+const CAMERA = { back: 16, up: 6.5, ahead: 40, drop: 4, eyeAhead: 2.5, eyeUp: 0.9 };
 const BOLT_HIT = 9, BOLT_DAMAGE = 5;
 const MISSILE_SPEED = 850, MISSILE_LIFE = 7, MISSILE_TURN = 2.6, MISSILE_FUSE = 16;
 const LOCK_RANGE = 3200, LOCK_CONE = 0.2, LOCK_KEEP = 0.38;
@@ -46,7 +49,7 @@ export class Game {
     this.catalog = catalog;
     this.sl = catalog.starlink;
     this.rs = catalog.rassvet;
-    this.ship = SHIPS[shipId];
+    this.ship = SHIPS[MISSIONS[missionId].ship ?? shipId]; // миссия может выдать свой аппарат
     this.audio = audio;
     this.input = input;
     this.onFinish = onFinish;
@@ -159,6 +162,7 @@ export class Game {
       alt: 550,
     };
     this.shipMesh = instance(ship.id);
+    if (ship.scale) this.shipMesh.scale.setScalar(ship.scale);
     this.scene.add(this.shipMesh);
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
     this.flames = ship.engines.map((e) => {
@@ -314,15 +318,47 @@ export class Game {
     const maxStep = ship.turn * 2.4 * dt;
     const dyaw = clamp(p.yawRate * dt - mouse.x * 0.0022, -maxStep, maxStep);
     const dpitch = clamp(p.pitchRate * dt - mouse.y * 0.0022, -maxStep, maxStep);
-    if (dt > 0) p.bank += (clamp((dyaw / dt) * 0.55, -1.1, 1.1) - p.bank) * Math.min(1, dt * 5);
+    if (dt > 0 && !ship.station) p.bank += (clamp((dyaw / dt) * 0.55, -1.1, 1.1) - p.bank) * Math.min(1, dt * 5);
 
     // Рыскание вокруг местной вертикали, тангаж относительно местного горизонта
     const up = _a.copy(p.pos).normalize();
     p.fwd.applyAxisAngle(up, dyaw);
     const right = _b.crossVectors(p.fwd, up).normalize();
     const pitch = Math.asin(clamp(p.fwd.dot(up), -1, 1));
-    p.fwd.applyAxisAngle(right, clamp(pitch + dpitch, -1.2, 1.2) - pitch).normalize();
+    const pitchMax = ship.station ? 1.4 : 1.2;
+    p.fwd.applyAxisAngle(right, clamp(pitch + dpitch, -pitchMax, pitchMax) - pitch).normalize();
 
+    if (ship.station) this.holdStation(dt);
+    else if (this.fly(dt) === false) return;
+
+    p.sinceHit += dt;
+    const linked = this.comm.dist < COMM_RANGE;
+    if (p.sinceHit > 3 && p.shield < ship.shield) p.shield = Math.min(ship.shield, p.shield + (linked ? 14 : 6) * dt);
+
+    // Оружие
+    p.fireCd -= dt;
+    p.missileCd -= dt;
+    if ((inp.down('Space') || inp.mouseDown(0)) && p.fireCd <= 0) {
+      this.fireCannon();
+      p.fireCd = 1 / (ship.fireRate ?? FIRE_RATE);
+    }
+    if ((inp.pressed('KeyF') || inp.mousePressed(2)) && p.missileCd <= 0) this.fireMissile();
+    if (inp.pressed('KeyV')) this.cockpit = !this.cockpit;
+  }
+
+  // Станция никуда не летит: по орбите её ведёт миссия, игрок только наводит оружие.
+  // Заряд (на месте топлива) копится сам и тратится миссией.
+  holdStation(dt) {
+    const p = this.player, ship = this.ship;
+    p.boosting = false;
+    p.fuel = Math.min(ship.fuel, p.fuel + ship.recharge * dt);
+    p.alt = p.pos.length() - R_EARTH;
+    this.warning = '';
+  }
+
+  // Полёт корабля: форсаж, движение, границы по высоте. Возвращает false, если аппарат погиб.
+  fly(dt) {
+    const p = this.player, inp = this.input, ship = this.ship;
     // Скорость постоянная, меняет её только форсаж
     const wantBoost = inp.down('ShiftLeft') || inp.down('ShiftRight');
     p.boosting = wantBoost && (p.boosting ? p.fuel > 0 : p.fuel > 6);
@@ -337,7 +373,10 @@ export class Game {
     this.warning = '';
     if (p.alt < ALT_BURN + 90) this.warning = 'АТМОСФЕРА! НАБЕРИТЕ ВЫСОТУ';
     if (p.alt < ALT_BURN) this.damagePlayer(((ALT_BURN - p.alt) / (ALT_BURN - ALT_DEATH)) * 70 * dt + 6 * dt, true);
-    if (p.alt < ALT_DEATH) return this.lose('Аппарат сгорел в атмосфере');
+    if (p.alt < ALT_DEATH) {
+      this.lose('Аппарат сгорел в атмосфере');
+      return false;
+    }
     if (p.alt > ALT_CEIL) {
       this.warning = 'ВЫ ПОКИДАЕТЕ ЗОНУ БОЯ';
       const up2 = _a.copy(p.pos).normalize();
@@ -345,20 +384,7 @@ export class Game {
       const push = 0.9 + (p.alt - ALT_CEIL) / 200;
       if (p.fwd.dot(up2) > -0.3) p.fwd.applyAxisAngle(_b.crossVectors(p.fwd, up2).normalize(), -push * dt).normalize();
     }
-
-    p.sinceHit += dt;
-    const linked = this.comm.dist < COMM_RANGE;
-    if (p.sinceHit > 3 && p.shield < ship.shield) p.shield = Math.min(ship.shield, p.shield + (linked ? 14 : 6) * dt);
-
-    // Оружие
-    p.fireCd -= dt;
-    p.missileCd -= dt;
-    if ((inp.down('Space') || inp.mouseDown(0)) && p.fireCd <= 0) {
-      this.fireCannon();
-      p.fireCd = 1 / FIRE_RATE;
-    }
-    if ((inp.pressed('KeyF') || inp.mousePressed(2)) && p.missileCd <= 0) this.fireMissile();
-    if (inp.pressed('KeyV')) this.cockpit = !this.cockpit;
+    return true;
   }
 
   // Движение вперёд с удержанием горизонта: при прямолинейном полёте нос
@@ -393,7 +419,7 @@ export class Game {
     if (p.hull <= 0) {
       p.hull = 0;
       // «Тихий» урон бывает только от нагрева в атмосфере
-      this.lose(quiet ? 'Аппарат сгорел в атмосфере' : 'Аппарат уничтожен');
+      this.lose(quiet ? 'Аппарат сгорел в атмосфере' : this.ship.lostText ?? 'Аппарат уничтожен');
     }
   }
 
@@ -447,7 +473,8 @@ export class Game {
     const p = this.player;
     const up = _a.copy(p.pos).normalize();
     const right = _b.crossVectors(p.fwd, up).normalize();
-    const muzzle = new THREE.Vector3().copy(p.pos).addScaledVector(right, p.gunSide * 1.3).addScaledVector(p.fwd, 3);
+    const mz = this.ship.muzzle ?? MUZZLE;
+    const muzzle = new THREE.Vector3().copy(p.pos).addScaledVector(right, p.gunSide * mz.side).addScaledVector(p.fwd, mz.ahead).addScaledVector(up, mz.up);
     p.gunSide = -p.gunSide;
     const dir = new THREE.Vector3().copy(p.fwd);
     // Доводка: если цель близко к перекрестью, снаряд идёт в упреждённую точку
@@ -504,7 +531,8 @@ export class Game {
           hit = true;
         }
       }
-      for (let i = 0; !hit && i < rs.count; i++) {
+      // Снаряды турелей и дронов по своим не засчитываются: игрок ими не управляет
+      for (let i = 0; !hit && !bul.auto && i < rs.count; i++) {
         if (rs.alive[i] && segDist2(bul.pos, step, rs.position(i, _c)) < 12 * 12) {
           this.damageFriendly(i);
           hit = true;
@@ -517,7 +545,7 @@ export class Game {
       }
       bul.pos.add(step);
       bul.life -= dt;
-      if (hit) this.stats.hits++;
+      if (hit && !bul.auto) this.stats.hits++;
       if (hit || spent || bul.life <= 0) this.bullets.splice(b, 1);
     }
 
@@ -525,7 +553,8 @@ export class Game {
       const bolt = this.bolts[b];
       // В системе отсчёта игрока: он сам за кадр успевает сместиться
       const rel = _d.copy(bolt.vel).sub(p.vel).multiplyScalar(dt);
-      let hit = this.state === 'play' && segDist2(bolt.pos, rel, p.pos) < BOLT_HIT * BOLT_HIT;
+      const size = Math.max(BOLT_HIT, this.ship.radius ?? 0); // в станцию попасть проще, чем в корабль
+      let hit = this.state === 'play' && segDist2(bolt.pos, rel, p.pos) < size * size;
       if (hit) this.damagePlayer(BOLT_DAMAGE);
       else hit = this.mission.boltHit(bolt, _d.copy(bolt.vel).multiplyScalar(dt));
       bolt.pos.addScaledVector(bolt.vel, dt);
@@ -707,7 +736,7 @@ export class Game {
       const up = _c.copy(g.pos).normalize();
       const aim = _b.copy(prey.pos).addScaledVector(prey.vel, dist / BOLT_SPEED).sub(g.pos).normalize();
       const want = _d.copy(aim);
-      const tooClose = prey === p ? 160 : 280; // крупную добычу облетает по большему радиусу
+      const tooClose = prey === p ? 160 + (this.ship.radius ?? 0) : 280; // крупную добычу облетает по большему радиусу
       if (g.mode === 'attack') {
         // Отворачивает за секунду до столкновения, иначе на встречных курсах таранит
         if (dist < tooClose || dist < closing || this.state !== 'play') {
@@ -745,7 +774,7 @@ export class Game {
       }
 
       // Столкновение с игроком
-      if (toPlayer < 9 && this.state === 'play') {
+      if (toPlayer < (this.ship.radius ?? 9) && this.state === 'play') {
         this.damageGuard(g, 99);
         this.damagePlayer(25);
         continue;
@@ -798,6 +827,7 @@ export class Game {
   }
 
   dropPickup(pos) {
+    if (this.ship.station) return; // станция за бонусом не слетает
     const k = this.pickups.find((x) => !x.alive);
     if (!k) return;
     const p = this.player, ship = this.ship;
@@ -1003,7 +1033,7 @@ export class Game {
     this.earth.uniforms.uTime.value = this.clock;
 
     if (this.state === 'play') this.updatePlayer(dt);
-    else this.movePlayer(dt);
+    else if (!this.ship.station) this.movePlayer(dt);
     this.updateNear();
     this.mission.update(dt);
     if (this.state === 'play') this.updateLock();
@@ -1013,14 +1043,16 @@ export class Game {
     this.updatePickups(dt);
 
     this.shipMesh.position.copy(p.pos);
-    orient(this.shipMesh, p.fwd, _a.copy(p.pos).normalize(), p.bank);
-    const thrust = p.boosting ? 5.5 : 1.2 + 1.6 * (p.speed / this.ship.cruise);
+    // Корабль смотрит туда же, куда нос; станция — вдоль своей орбиты, как бы ни крутили пулемёты
+    const heading = this.ship.station && p.vel.lengthSq() > 0 ? _b.copy(p.vel).normalize() : p.fwd;
+    orient(this.shipMesh, heading, _a.copy(p.pos).normalize(), p.bank);
+    const thrust = p.boosting ? 5.5 : 1.2 + 1.6 * (p.speed / (this.ship.cruise || 1));
     for (const f of this.flames) f.scale.set(1, 1, thrust * (0.85 + Math.random() * 0.3));
     this.flameMat.color.set(p.boosting ? 0x9fd8ff : 0xffa040);
 
     this.updateCamera(dt);
     this.updateEffects(dt);
-    this.audio.engine(p.speed / this.ship.boost, p.boosting, this.state === 'play');
+    this.audio.engine(this.ship.boost ? p.speed / this.ship.boost : 0, p.boosting, this.state === 'play' && !this.ship.station);
 
     if (this.state !== 'play' && this.state !== 'briefing' && this.endTimer > 0) {
       this.endTimer -= dt;
@@ -1036,13 +1068,14 @@ export class Game {
     const f = this.cockpit ? p.fwd : this.camFwd;
     const right = _b.crossVectors(f, up).normalize();
     const top = _c.crossVectors(right, f);
+    const rig = this.ship.camera ?? CAMERA;
     if (this.cockpit) {
-      cam.position.copy(p.pos).addScaledVector(f, 2.5).addScaledVector(top, 0.9);
+      cam.position.copy(p.pos).addScaledVector(f, rig.eyeAhead).addScaledVector(top, rig.eyeUp);
       _d.copy(cam.position).addScaledVector(f, 100);
     } else {
       // Камера смотрит чуть сверху вниз, чтобы Земля занимала заметную часть кадра
-      cam.position.copy(p.pos).addScaledVector(f, -16).addScaledVector(top, 6.5);
-      _d.copy(p.pos).addScaledVector(f, 40).addScaledVector(top, -4);
+      cam.position.copy(p.pos).addScaledVector(f, -rig.back).addScaledVector(top, rig.up);
+      _d.copy(p.pos).addScaledVector(f, rig.ahead).addScaledVector(top, -rig.drop);
     }
     cam.up.copy(top).applyAxisAngle(f, -p.bank * (this.cockpit ? 0.6 : 0.22));
     if (this.shake > 0) {

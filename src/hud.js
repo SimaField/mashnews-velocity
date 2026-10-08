@@ -305,15 +305,17 @@ export class Hud {
     const hullColor = p.hull < ship.hull * 0.3 ? COLORS.red : COLORS.green;
     this.bar(x, y, 150, 'ЩИТ', p.shield, ship.shield, COLORS.cyan);
     this.bar(x, y + 20, 150, 'КОРПУС', p.hull, ship.hull, hullColor);
-    this.bar(x, y + 40, 150, 'ТОПЛИВО', p.fuel, ship.fuel, COLORS.gold);
+    this.bar(x, y + 40, 150, ship.fuelLabel ?? 'ТОПЛИВО', p.fuel, ship.fuel, COLORS.gold);
 
     const rx = w - 24;
-    this.text(`${Math.round(p.speed)} км/с`, rx, h - 76, p.boosting ? COLORS.gold : COLORS.cyan, 20, 'right', 700);
-    this.text(p.boosting ? 'ФОРСАЖ' : 'СКОРОСТЬ', rx - 132, h - 78, p.boosting ? COLORS.gold : COLORS.cyan, 10, 'right');
+    // У станции на месте скорости то, что подставит миссия
+    const line = game.mission.speedLine();
+    this.text(line ? line.value : `${Math.round(p.speed)} км/с`, rx, h - 76, p.boosting ? COLORS.gold : COLORS.cyan, 20, 'right', 700);
+    this.text(line ? line.label : p.boosting ? 'ФОРСАЖ' : 'СКОРОСТЬ', rx - 132, h - 78, p.boosting ? COLORS.gold : COLORS.cyan, 10, 'right');
     const lowAlt = p.alt < 260;
     this.text(`ВЫСОТА ${Math.round(p.alt)} км`, rx, h - 54, lowAlt ? COLORS.red : COLORS.cyan, 12, 'right');
     this.text(`РАКЕТЫ ${'▮'.repeat(Math.min(p.missiles, 16))}${p.missiles ? '' : '—'} ${p.missiles}`, rx, h - 36, p.missiles ? COLORS.white : COLORS.red, 12, 'right');
-    this.text(`${ship.name.toUpperCase()} · ПУШКА Р-23М`, rx, h - 18, 'rgba(94,242,255,.6)', 10, 'right');
+    this.text(`${ship.name.toUpperCase()} · ${ship.gun ?? 'ПУШКА Р-23М'}`, rx, h - 18, 'rgba(94,242,255,.6)', 10, 'right');
   }
 
   // Телефон: щит, корпус и топливо слева от радара; ракеты показаны на своей кнопке
@@ -324,8 +326,9 @@ export class Hud {
     const hullColor = p.hull < ship.hull * 0.3 ? COLORS.red : COLORS.green;
     this.bar(x + 8, y + 6, 78, 'ЩИТ', p.shield, ship.shield, COLORS.cyan, 46);
     this.bar(x + 8, y + 22, 78, 'КОРП', p.hull, ship.hull, hullColor, 46);
-    this.bar(x + 8, y + 38, 78, 'ТОПЛ', p.fuel, ship.fuel, COLORS.gold, 46);
-    this.text(`${Math.round(p.speed)} км/с`, x + 4, y - 7, p.boosting ? COLORS.gold : COLORS.cyan, 11);
+    this.bar(x + 8, y + 38, 78, ship.fuelLabel ? 'ЗАРЯД' : 'ТОПЛ', p.fuel, ship.fuel, COLORS.gold, 46);
+    const line = game.mission.speedLine();
+    this.text(line ? `${line.label} ${line.value}` : `${Math.round(p.speed)} км/с`, x + 4, y - 7, p.boosting ? COLORS.gold : COLORS.cyan, 11);
     this.text(`${Math.round(p.alt)} км`, x + 172, y - 7, p.alt < 260 ? COLORS.red : COLORS.cyan, 11, 'right');
   }
 
@@ -446,7 +449,7 @@ export class Hud {
       this.text(game.warning, w / 2, Math.round(h * 0.22), COLORS.red, 20, 'center', 700);
     }
     if (game.state === 'won') this.text('ЗАДАЧА ВЫПОЛНЕНА', w / 2, h * 0.42, COLORS.gold, 34, 'center', 700);
-    if (game.state === 'lost') this.text(game.shipLost ? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.42, COLORS.red, 34, 'center', 700);
+    if (game.state === 'lost') this.text(game.shipLost ? game.ship.lostBanner ?? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.42, COLORS.red, 34, 'center', 700);
   }
 
   // Телефон: тот же состав, но мельче; правый верхний угол оставлен кнопке паузы
@@ -474,6 +477,6 @@ export class Hud {
       this.text(game.warning, w / 2, Math.round(h * 0.27), COLORS.red, 16, 'center', 700);
     }
     if (game.state === 'won') this.text('ЗАДАЧА ВЫПОЛНЕНА', w / 2, h * 0.45, COLORS.gold, 26, 'center', 700);
-    if (game.state === 'lost') this.text(game.shipLost ? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.45, COLORS.red, 26, 'center', 700);
+    if (game.state === 'lost') this.text(game.shipLost ? game.ship.lostBanner ?? 'АППАРАТ ПОТЕРЯН' : 'МИССИЯ ПРОВАЛЕНА', w / 2, h * 0.45, COLORS.red, 26, 'center', 700);
   }
 }

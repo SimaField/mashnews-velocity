@@ -47,6 +47,11 @@ export class Mission {
 
   radar() {}
 
+  // Что показывать на приборах вместо скорости: { label, value } или null
+  speedLine() {
+    return null;
+  }
+
   dispose() {}
 }
 

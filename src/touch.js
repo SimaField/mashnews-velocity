@@ -77,6 +77,11 @@ export class TouchControls {
     }
   }
 
+  // Вторая кнопка зависит от миссии: у корабля это форсаж, у станции — запуск дрона
+  setBoostLabel(text) {
+    this.root.querySelector('.t-boost').textContent = text;
+  }
+
   setMissiles(n) {
     if (n === this.shown) return;
     this.shown = n;
