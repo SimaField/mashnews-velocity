@@ -263,15 +263,16 @@ function bind() {
     menu.setSpin(e.target.checked);
   });
   // Выбор миссии на экране брифинга: бой пересоздаётся под выбранный сценарий
-  $('missions').innerHTML = Object.values(MISSIONS).map((m) => `<button data-mission="${m.id}">${m.number} · ${m.name}</button>`).join('');
+  $('missions').innerHTML = Object.values(MISSIONS).map((m) => `<button data-mission="${m.id}"><b>${m.number}</b>${m.name}</button>`).join('');
   if (!catalog.iss) {
     const defend = $('missions').querySelector('[data-mission="defend"]');
     defend.disabled = true;
     defend.title = 'Нет данных об орбите МКС';
   }
   $('missions').addEventListener('click', (e) => {
-    const id = e.target.dataset.mission;
-    if (!id || id === missionId || e.target.disabled) return;
+    const btn = e.target.closest('[data-mission]');
+    if (!btn || btn.disabled || btn.dataset.mission === missionId) return;
+    const id = btn.dataset.mission;
     audio.unlock();
     audio.click();
     missionId = id;

@@ -132,6 +132,39 @@ const PARTS = {
   starshipEngine: () => [part(cyl(1.0, 1.9, 3.4, 8), '#4a3038', { r: NOSE })],
   starshipBay: () => [part(box(5.2, 0.8, 10), '#ff5a2a')],
   starshipDoor: () => [part(box(5.8, 0.5, 10.6), '#c3cad3')],
+  // Голова клоуна, 220 км в поперечнике: лицо смотрит в −Z. Глаза и нос — отдельные модели
+  clown: () => [
+    part(new THREE.SphereGeometry(110, 12, 8), '#f4efe6'),
+    part(new THREE.SphereGeometry(62, 7, 5), '#ff6a2a', { p: [-118, 40, 20] }),
+    part(new THREE.SphereGeometry(62, 7, 5), '#ff6a2a', { p: [118, 40, 20] }),
+    part(new THREE.SphereGeometry(40, 6, 4), '#ff6a2a', { p: [-95, 105, 10] }),
+    part(new THREE.SphereGeometry(40, 6, 4), '#ff6a2a', { p: [95, 105, 10] }),
+    part(new THREE.ConeGeometry(42, 120, 6), '#3a6fe0', { p: [18, 165, 0], r: [0, 0, -0.22] }),
+    part(ball(16), '#ffd23e', { p: [31, 224, 0] }),
+    part(box(70, 12, 10), '#d81e3a', { p: [0, -58, -93] }),
+    part(box(34, 12, 10), '#d81e3a', { p: [-46, -46, -90], r: [0, 0, -0.5] }),
+    part(box(34, 12, 10), '#d81e3a', { p: [46, -46, -90], r: [0, 0, 0.5] }),
+    part(ball(20), '#ff9fb5', { p: [-68, -14, -80] }),
+    part(ball(20), '#ff9fb5', { p: [68, -14, -80] }),
+    part(new THREE.ConeGeometry(34, 60, 4), '#2bd4a8', { p: [-34, -128, -40], r: [0, 0, -Math.PI / 2] }),
+    part(new THREE.ConeGeometry(34, 60, 4), '#2bd4a8', { p: [34, -128, -40], r: [0, 0, Math.PI / 2] }),
+    part(ball(14), '#ffd23e', { p: [0, -128, -40] }),
+  ],
+  clownEye: () => [
+    part(ball(24), '#10131c'),
+    part(ball(9), '#ffffff', { p: [6, 8, -19] }),
+  ],
+  clownNose: () => [part(new THREE.SphereGeometry(30, 8, 6), '#e3202e')],
+  // Рука в перчатке: пальцы вверх, большой палец в сторону −X. Это правая рука; левая — её зеркало
+  clownHand: () => [
+    part(new THREE.SphereGeometry(27, 8, 6), '#f6f3ee', { s: [1, 1.05, 0.55] }),
+    part(cyl(6.5, 7, 28, 6), '#f6f3ee', { p: [19, 33, 0], r: [0, 0, -0.12] }),
+    part(cyl(6.5, 7, 34, 6), '#f6f3ee', { p: [7, 38, 0] }),
+    part(cyl(6.5, 7, 34, 6), '#f6f3ee', { p: [-6, 38, 0] }),
+    part(cyl(6.5, 7, 30, 6), '#f6f3ee', { p: [-18, 34, 0], r: [0, 0, 0.12] }),
+    part(cyl(7, 8, 26, 6), '#f6f3ee', { p: [-31, 4, 0], r: [0, 0, 1.0] }),
+    part(cyl(22, 26, 14, 8), '#3a6fe0', { p: [0, -31, 0] }),
+  ],
   missile: () => [
     part(new THREE.ConeGeometry(0.45, 3, 5), WHITE, { r: NOSE }),
     part(box(1.4, 0.06, 0.6), GREY, { p: [0, 0, 1.2] }),
@@ -142,6 +175,7 @@ const PARTS = {
 const EDGE = {
   spiral: '#ffb23e', buran: '#ffb23e', is: '#ffb23e', zeus: '#ffb23e',
   starlink: '#3d7fd9', rassvet: '#ffb23e', guard: '#ff4d5e', missile: '#ffd9a0',
+  clown: '#ff7ad9', clownEye: '#5ef2ff', clownNose: '#ffd27a', clownHand: '#ff7ad9',
   iss: '#ffb23e', starship: '#ff4d5e', starshipEngine: '#ff9a3c', starshipBay: '#ffd27a', starshipDoor: '#ff4d5e',
 };
 
